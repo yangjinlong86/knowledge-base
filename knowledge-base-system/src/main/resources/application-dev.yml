@@ -1,0 +1,27 @@
+#debug: true
+
+spring:
+  config:
+    import: classpath:llm.yml
+  ai:
+    openai:
+      base-url: http://localhost:11434
+      api-key: 123
+    vectorstore:
+      pgvector:
+        initialize-schema: true
+        table-name: vector_store_bge_m3
+        dimensions: 1024
+        remove-existing-vector-store-table: false
+  datasource:
+    username: pguser
+    password: 123456
+    url: jdbc:postgresql://localhost:5432/pgtest?currentSchema=public
+
+# MinIO
+minio:
+  endpoint: http://127.0.0.1:9090/
+  access-key: minioadmin
+  secret-key: minioadmin
+  default-bucket: permission-demo
+  default-expiry: 3600 # 临时访问连接1h有效 60 * 6
