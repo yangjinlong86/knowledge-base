@@ -2,7 +2,7 @@
 
 
 
-&emsp;使用SpringAI 1.x版本对项目进行重构,**旧版本详见分支**[0.8-vue](https://github.com/NingNing0111/knowledge-base/tree/0.8-vue)：
+&emsp;使用SpringAI 1.x版本对项目进行重构,
 
 - 前端：React + Umi.js
 - 后端：SpringAI 1.x
@@ -48,36 +48,13 @@
 - [x] 知识库下附件管理界面
 
 
-
-
-## 演示
-
-### 知识库管理
-
-![img.png](doc/images/1.png)
-
-![img.png](doc/images/2.png)
-
-[//]: # (![img.png]&#40;doc/images/3.png&#41;)
-
-### 简单对话 + 简单RAG对话
-
-![img.png](doc/images/8.png)
-
-![img_1.png](doc/images/9.png)
-
-### 多模态对话
-
-![img.png](doc/images/10.png)
-
-
 ## 开发
 
 ### 环境
 
 - node: v18
 - jdk: 17
-- minio + pgvector: [docker-compose.yml](env/docker-compose.yml)
+- minio + pgvector
 
 ### 启动前端
 

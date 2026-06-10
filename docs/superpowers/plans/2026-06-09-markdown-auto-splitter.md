@@ -14,20 +14,20 @@
 
 | 操作 | 路径 | 职责 |
 |------|------|------|
-| 创建 | `knowledge-base-system/src/main/java/me/pgthinker/system/utils/MarkdownAutoSplitter.java` | 主分割器类 |
-| 测试 | `knowledge-base-system/src/test/java/me/pgthinker/system/utils/MarkdownAutoSplitterTest.java` | 单元测试 |
+| 创建 | `knowledge-base-system/src/main/java/org/nodoer/system/utils/MarkdownAutoSplitter.java` | 主分割器类 |
+| 测试 | `knowledge-base-system/src/test/java/org/nodoer/system/utils/MarkdownAutoSplitterTest.java` | 单元测试 |
 
 ---
 
 ### [x] 任务 1：项目设置与测试类
 
 **文件：**
-- 创建：`knowledge-base-system/src/test/java/me/pgthinker/system/utils/MarkdownAutoSplitterTest.java`
+- 创建：`knowledge-base-system/src/test/java/org/nodoer/system/utils/MarkdownAutoSplitterTest.java`
 
 - [x] **第 1 步：编写空输入的失败测试**
 
 ```java
-package me.pgthinker.system.utils;
+package org.nodoer.system.utils;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.document.Document;
@@ -62,7 +62,7 @@ class MarkdownAutoSplitterTest {
 - [ ] **第 3 步：创建主分割器类桩**
 
 ```java
-package me.pgthinker.system.utils;
+package org.nodoer.system.utils;
 
 import org.springframework.ai.document.Document;
 import org.springframework.ai.transformer.splitter.TokenTextSplitter;
@@ -103,8 +103,8 @@ public class MarkdownAutoSplitter {
 - [ ] **第 5 步：提交**
 
 ```bash
-git add knowledge-base-system/src/test/java/me/pgthinker/system/utils/MarkdownAutoSplitterTest.java
-git add knowledge-base-system/src/main/java/me/pgthinker/system/utils/MarkdownAutoSplitter.java
+git add knowledge-base-system/src/test/java/org/nodoer/system/utils/MarkdownAutoSplitterTest.java
+git add knowledge-base-system/src/main/java/org/nodoer/system/utils/MarkdownAutoSplitter.java
 git commit -m "feat: add MarkdownAutoSplitter stub"
 ```
 
@@ -113,8 +113,8 @@ git commit -m "feat: add MarkdownAutoSplitter stub"
 ### 任务 2：处理标题（h1 作为数据块边界）
 
 **文件：**
-- 修改：`knowledge-base-system/src/main/java/me/pgthinker/system/utils/MarkdownAutoSplitter.java`
-- 修改：`knowledge-base-system/src/test/java/me/pgthinker/system/utils/MarkdownAutoSplitterTest.java`
+- 修改：`knowledge-base-system/src/main/java/org/nodoer/system/utils/MarkdownAutoSplitter.java`
+- 修改：`knowledge-base-system/src/test/java/org/nodoer/system/utils/MarkdownAutoSplitterTest.java`
 
 - [ ] **第 1 步：编写 h1 标题的失败测试**
 
@@ -307,8 +307,8 @@ public class MarkdownAutoSplitter {
 - [ ] **第 5 步：提交**
 
 ```bash
-git add knowledge-base-system/src/main/java/me/pgthinker/system/utils/MarkdownAutoSplitter.java
-git add knowledge-base-system/src/test/java/me/pgthinker/system/utils/MarkdownAutoSplitterTest.java
+git add knowledge-base-system/src/main/java/org/nodoer/system/utils/MarkdownAutoSplitter.java
+git add knowledge-base-system/src/test/java/org/nodoer/system/utils/MarkdownAutoSplitterTest.java
 git commit -m "feat: implement h1 heading as chunk boundary"
 ```
 
@@ -317,8 +317,8 @@ git commit -m "feat: implement h1 heading as chunk boundary"
 ### 任务 3：处理表格（保留完整表格）
 
 **文件：**
-- 修改：`knowledge-base-system/src/main/java/me/pgthinker/system/utils/MarkdownAutoSplitter.java`
-- 修改：`knowledge-base-system/src/test/java/me/pgthinker/system/utils/MarkdownAutoSplitterTest.java`
+- 修改：`knowledge-base-system/src/main/java/org/nodoer/system/utils/MarkdownAutoSplitter.java`
+- 修改：`knowledge-base-system/src/test/java/org/nodoer/system/utils/MarkdownAutoSplitterTest.java`
 
 - [ ] **第 1 步：编写表格保留的失败测试**
 
@@ -442,8 +442,8 @@ public class MarkdownAutoSplitter {
 - [ ] **第 5 步：提交**
 
 ```bash
-git add knowledge-base-system/src/main/java/me/pgthinker/system/utils/MarkdownAutoSplitter.java
-git add knowledge-base-system/src/test/java/me/pgthinker/system/utils/MarkdownAutoSplitterTest.java
+git add knowledge-base-system/src/main/java/org/nodoer/system/utils/MarkdownAutoSplitter.java
+git add knowledge-base-system/src/test/java/org/nodoer/system/utils/MarkdownAutoSplitterTest.java
 git commit -m "feat: preserve tables as whole units"
 ```
 
@@ -452,8 +452,8 @@ git commit -m "feat: preserve tables as whole units"
 ### 任务 4：处理大小约束（max/min 数据块大小）
 
 **文件：**
-- 修改：`knowledge-base-system/src/main/java/me/pgthinker/system/utils/MarkdownAutoSplitter.java`
-- 修改：`knowledge-base-system/src/test/java/me/pgthinker/system/utils/MarkdownAutoSplitterTest.java`
+- 修改：`knowledge-base-system/src/main/java/org/nodoer/system/utils/MarkdownAutoSplitter.java`
+- 修改：`knowledge-base-system/src/test/java/org/nodoer/system/utils/MarkdownAutoSplitterTest.java`
 
 - [ ] **第 1 步：编写大小约束的失败测试**
 
@@ -552,8 +552,8 @@ private List<Document> mergeSmallChunks(List<Document> documents) {
 - [ ] **第 5 步：提交**
 
 ```bash
-git add knowledge-base-system/src/main/java/me/pgthinker/system/utils/MarkdownAutoSplitter.java
-git add knowledge-base-system/src/test/java/me/pgthinker/system/utils/MarkdownAutoSplitterTest.java
+git add knowledge-base-system/src/main/java/org/nodoer/system/utils/MarkdownAutoSplitter.java
+git add knowledge-base-system/src/test/java/org/nodoer/system/utils/MarkdownAutoSplitterTest.java
 git commit -m "feat: implement max/min chunk size constraints"
 ```
 
@@ -562,14 +562,14 @@ git commit -m "feat: implement max/min chunk size constraints"
 ### 任务 5：与现有代码集成
 
 **文件：**
-- 修改：`knowledge-base-system/src/main/java/me/pgthinker/system/service/ai/impl/OriginFileResourceServiceImpl.java`
+- 修改：`knowledge-base-system/src/main/java/org/nodoer/system/service/ai/impl/OriginFileResourceServiceImpl.java`
 
 - [ ] **第 1 步：更新 OriginFileResourceServiceImpl 中的导入**
 
 在文件顶部添加：
 
 ```java
-import me.pgthinker.system.utils.MarkdownAutoSplitter;
+import org.nodoer.system.utils.MarkdownAutoSplitter;
 ```
 
 - [ ] **第 2 步：用 MarkdownAutoSplitter 替换 SentenceSplitter**
@@ -598,7 +598,7 @@ List<Document> splitDocumentList = markdownSplitter.split(tikaDocumentReader.rea
 - [ ] **第 4 步：提交**
 
 ```bash
-git add knowledge-base-system/src/main/java/me/pgthinker/system/service/ai/impl/OriginFileResourceServiceImpl.java
+git add knowledge-base-system/src/main/java/org/nodoer/system/service/ai/impl/OriginFileResourceServiceImpl.java
 git commit -m "feat: integrate MarkdownAutoSplitter into document upload"
 ```
 

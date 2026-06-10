@@ -67,4 +67,4 @@ springdoc:
   group-configs:
     - group: 'default'
       paths-to-match: '/**'
-      packages-to-scan: me.pgthinker.system.controller
+      packages-to-scan: org.nodoer.system.controller

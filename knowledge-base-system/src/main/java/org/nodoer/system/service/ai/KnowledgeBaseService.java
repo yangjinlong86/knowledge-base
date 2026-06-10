@@ -1,0 +1,29 @@
+package org.nodoer.system.service.ai;
+
+import org.nodoer.system.controller.vo.KnowledgeBaseVO;
+import org.nodoer.system.controller.vo.SimpleBaseVO;
+
+import java.util.List;
+
+/**
+ * @Project: org.nodoer.system.service.ai
+ * @Author: NingNing0111
+ * @Github: https://github.com/ningning0111
+ * @Date: 2025/4/8 07:56
+ * @Description:
+ */
+public interface KnowledgeBaseService {
+
+	// 添加知识库
+	String addKnowledgeBase(KnowledgeBaseVO knowledgeBaseVO);
+
+	// 删除知识库
+	Integer removeKnowledgeBase(KnowledgeBaseVO knowledgeBaseVO);
+
+	// 所有知识库
+	List<KnowledgeBaseVO> knowLedgelist();
+
+	// 简单的列表
+	List<SimpleBaseVO> simpleList();
+
+}

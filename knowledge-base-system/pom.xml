@@ -4,7 +4,7 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
-        <groupId>me.pgthinker</groupId>
+        <groupId>org.nodoer</groupId>
         <artifactId>knowledge-base</artifactId>
         <version>${revision}</version>
         <relativePath>../pom.xml</relativePath>
@@ -18,7 +18,7 @@
     <dependencyManagement>
         <dependencies>
             <dependency>
-                <groupId>me.pgthinker</groupId>
+                <groupId>org.nodoer</groupId>
                 <artifactId>knowledge-base-bom</artifactId>
                 <version>${revision}</version>
                 <type>pom</type>
@@ -38,7 +38,7 @@
             <version>1.0.0.4</version>
         </dependency>
         <dependency>
-            <groupId>me.pgthinker</groupId>
+            <groupId>org.nodoer</groupId>
             <artifactId>knowledge-base-core</artifactId>
             <version>${revision}</version>
         </dependency>
