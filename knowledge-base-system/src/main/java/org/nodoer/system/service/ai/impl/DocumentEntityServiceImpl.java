@@ -139,8 +139,8 @@ public class DocumentEntityServiceImpl implements DocumentEntityService {
 		return documentEntities.stream().map(item -> {
 			String resourceId = item.getResourceId();
 			OriginFileResource originFileResource = originFileResourceMapper.selectById(resourceId);
-			String path = "";// objectStoreService.getTmpFileUrl(originFileResource.getBucketName(),
-			// originFileResource.getObjectName());
+			String path = objectStoreService.getTmpFileUrl(
+					originFileResource.getBucketName(), originFileResource.getObjectName());
 			KnowledgeBase knowledgeBase = knowledgeBaseMapper.selectById(item.getBaseId());
 			DocumentVO documentVO = new DocumentVO();
 			documentVO.setId(item.getId());
@@ -149,7 +149,7 @@ public class DocumentEntityServiceImpl implements DocumentEntityService {
 			documentVO.setBaseId(item.getBaseId());
 			documentVO.setPath(path);
 			documentVO.setKnowledgeBaseName(knowledgeBase.getName());
-			documentVO.setFileType("Markdown");
+			documentVO.setFileType(originFileResource.getContentType());
 			documentVO.setUploadTime(item.getCreateTime());
 			return documentVO;
 		}).toList();

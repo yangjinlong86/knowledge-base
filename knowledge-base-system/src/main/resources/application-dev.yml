@@ -20,8 +20,8 @@ spring:
 
 # MinIO
 minio:
-  endpoint: http://127.0.0.1:9090/
+  endpoint: http://127.0.0.1:9000/
   access-key: minioadmin
-  secret-key: minioadmin
+  secret-key: minioadminpassword
   default-bucket: permission-demo
   default-expiry: 3600 # 临时访问连接1h有效 60 * 6

@@ -94,7 +94,7 @@ export default defineConfig({
 
     { path: '/*', component: '@/pages/404' },
   ],
-  npmClient: 'pnpm',
+  npmClient: 'npm',
   proxy: {
     '/api': {
       target: 'http://localhost:8788/api',
