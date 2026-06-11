@@ -74,7 +74,7 @@ public class KnowledgeBaseServiceImpl extends ServiceImpl<KnowledgeBaseMapper, K
 		knowledgeBaseVO.setCreateTime(knowledgeBase.getCreateTime());
 		String creator = knowledgeBase.getCreator();
 		if (creator != null) {
-			SystemUser user = userMapper.selectById(knowledgeBase.getCreator());
+			SystemUser user = userMapper.selectById(Long.parseLong(knowledgeBase.getCreator()));
 			knowledgeBaseVO.setAuthor(user.getId());
 			knowledgeBaseVO.setAuthorName(user.getUsername());
 		}
