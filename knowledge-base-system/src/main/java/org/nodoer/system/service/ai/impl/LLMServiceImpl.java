@@ -8,9 +8,9 @@ import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.ollama.OllamaEmbeddingModel;
 import org.springframework.ai.ollama.api.OllamaApi;
 import org.springframework.ai.ollama.api.OllamaOptions;
-//import org.springframework.ai.openai.OpenAiChatModel;
-//import org.springframework.ai.openai.OpenAiChatOptions;
-//import org.springframework.ai.openai.api.OpenAiApi;
+import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.pgvector.PgVectorStore;
 import org.springframework.ai.vectorstore.pgvector.autoconfigure.PgVectorStoreProperties;
@@ -19,16 +19,31 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 /**
- * @Project: org.nodoer.service.doc.impl
- * @Author: NingNing0111
- * @Github: https://github.com/ningning0111
- * @Date: 2025/3/30 03:08
- * @Description:
+ * {@link LLMService} 的默认实现。
+ *
+ * <p>
+ * 设计要点：
+ * </p>
+ * <ol>
+ * <li>三个 ChatModel（simple / long / multimodal）统一走 OpenAI 协议，经
+ * <a href="https://github.com/songquanpeng/one-api">One-API</a> 路由到任意 OpenAI 兼容后端， 配置分别来自
+ * {@code llm.yml} 的 {@code chat.simple.*} / {@code chat.long.*} /
+ * {@code chat.multimodal.*}。</li>
+ * <li>EmbeddingModel 走本地 Ollama（默认 {@code bge-m3}），配置来自 {@code embedding.*}。</li>
+ * <li>所有模型都"按需构建"——每次调用 getter 都新建一个实例。 builder 本身开销很小，且底层 HTTP client 在 OpenAiApi /
+ * OllamaApi 内部惰性创建；如未来出现性能瓶颈再考虑缓存。</li>
+ * <li>之所以全部手动 build 而不是依赖 starter 自动装配： 项目里有三套独立的 chat 配置（base-url / api-key / model 各异），
+ * Spring AI 的自动装配每个 provider 只能产出一个 ChatModel Bean，表达不了这种 "1 个 provider × 多套配置" 的需求。 因此在
+ * application.yml 里把 chat / embedding 的自动装配关掉（{@code spring.ai.model.chat=none} 与
+ * {@code spring.ai.model.embedding=none}），手工接管。</li>
+ * </ol>
  */
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class LLMServiceImpl implements LLMService {
+
+	// ====== chat.simple.* ：通用对话模型配置 ======
 
 	@Value("${chat.simple.base-url}")
 	private String simpleBaseUrl;
@@ -39,6 +54,8 @@ public class LLMServiceImpl implements LLMService {
 	@Value("${chat.simple.model}")
 	private String simpleModel;
 
+	// ====== chat.long.* ：超长上下文对话模型配置 ======
+
 	@Value("${chat.long.base-url}")
 	private String longBaseUrl;
 
@@ -47,6 +64,8 @@ public class LLMServiceImpl implements LLMService {
 
 	@Value("${chat.long.model}")
 	private String longModel;
+
+	// ====== chat.multimodal.* ：多模态对话模型配置 ======
 
 	@Value("${chat.multimodal.base-url}")
 	private String multimodalBaseUrl;
@@ -57,49 +76,53 @@ public class LLMServiceImpl implements LLMService {
 	@Value("${chat.multimodal.model}")
 	private String multimodalModel;
 
+	// ====== embedding.* ：向量化模型配置（本地 Ollama） ======
+
 	@Value("${embedding.base-url}")
 	private String embeddingBaseUrl;
 
 	@Value("${embedding.model}")
 	private String embeddingModel;
 
+	/** PgVectorStore 需要的 JdbcTemplate，由 Spring Boot 自动注入。 */
 	private final JdbcTemplate jdbcTemplate;
 
+	/** pgvector 自动装配读到的属性（表名 / 维度 / 距离类型等），转交给手动 build 的 PgVectorStore。 */
 	private final PgVectorStoreProperties pgVectorStoreProperties;
 
-	//
-	// @Override
-	// public ChatModel getChatModel() {
-	// OpenAiApi openAiApi =
-	// OpenAiApi.builder().baseUrl(simpleBaseUrl).apiKey(simpleApiKey).build();
-	// return OpenAiChatModel.builder()
-	// .openAiApi(openAiApi)
-	// .defaultOptions(OpenAiChatOptions.builder().model(simpleModel).build())
-	// .build();
-	// }
-	//
-	// @Override
-	// public ChatModel getLongContextChatModel() {
-	// OpenAiApi openAiApi =
-	// OpenAiApi.builder().baseUrl(longBaseUrl).apiKey(longApiKey).build();
-	// return OpenAiChatModel.builder()
-	// .openAiApi(openAiApi)
-	// .defaultOptions(OpenAiChatOptions.builder().model(longModel).build())
-	// .build();
-	// }
-	//
-	// @Override
-	// public ChatModel getMultimodalChatModel() {
-	// OpenAiApi openAiApi =
-	// OpenAiApi.builder().baseUrl(multimodalBaseUrl).apiKey(multimodalApiKey).build();
-	// return OpenAiChatModel.builder()
-	// .openAiApi(openAiApi)
-	// .defaultOptions(OpenAiChatOptions.builder().model(multimodalModel).build())
-	// .build();
-	// }
+	@Override
+	public ChatModel getChatModel() {
+		// 通用对话模型：走 OpenAI 协议，base-url / api-key / model 全来自 llm.yml 的 chat.simple.*
+		OpenAiApi openAiApi = OpenAiApi.builder().baseUrl(simpleBaseUrl).apiKey(simpleApiKey).build();
+		return OpenAiChatModel.builder()
+			.openAiApi(openAiApi)
+			.defaultOptions(OpenAiChatOptions.builder().model(simpleModel).build())
+			.build();
+	}
+
+	@Override
+	public ChatModel getLongContextChatModel() {
+		// 超长上下文对话模型：同样走 OpenAI 协议，配置来自 chat.long.*
+		OpenAiApi openAiApi = OpenAiApi.builder().baseUrl(longBaseUrl).apiKey(longApiKey).build();
+		return OpenAiChatModel.builder()
+			.openAiApi(openAiApi)
+			.defaultOptions(OpenAiChatOptions.builder().model(longModel).build())
+			.build();
+	}
+
+	@Override
+	public ChatModel getMultimodalChatModel() {
+		// 多模态对话模型：同样走 OpenAI 协议，配置来自 chat.multimodal.*
+		OpenAiApi openAiApi = OpenAiApi.builder().baseUrl(multimodalBaseUrl).apiKey(multimodalApiKey).build();
+		return OpenAiChatModel.builder()
+			.openAiApi(openAiApi)
+			.defaultOptions(OpenAiChatOptions.builder().model(multimodalModel).build())
+			.build();
+	}
 
 	@Override
 	public EmbeddingModel getEmbeddingModel() {
+		// 向量化模型走本地 Ollama，bge-m3（1024 维）与 pgvector 表 vector_store_bge_m3 对齐
 		OllamaApi ollamaApi = OllamaApi.builder().baseUrl(embeddingBaseUrl).build();
 		return OllamaEmbeddingModel.builder()
 			.ollamaApi(ollamaApi)
@@ -109,6 +132,7 @@ public class LLMServiceImpl implements LLMService {
 
 	@Override
 	public VectorStore getVectorStore() {
+		// 用上面手动构建的 EmbeddingModel 作为 embedding 提供方，其它参数沿用 pgvector 自动装配读到的属性
 		return PgVectorStore.builder(jdbcTemplate, this.getEmbeddingModel())
 			.initializeSchema(pgVectorStoreProperties.isInitializeSchema())
 			.dimensions(pgVectorStoreProperties.getDimensions())
