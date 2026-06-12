@@ -41,8 +41,12 @@ export default defineConfig({
     },
     {
       path: '/',
-      redirect: '/chat',
+      name: '知识库管理',
       routes: [
+        {
+          path: '/',
+          redirect: '/chat',
+        },
         {
           path: '/chat',
           name: 'AI 对话',
