@@ -96,7 +96,6 @@ const KnowledgeBasePage = () => {
             showActions="hover"
             grid={{ gutter: 16, column: 3 }}
             bordered
-            ghost
             metas={{
               avatar: {
                 render: () => {
