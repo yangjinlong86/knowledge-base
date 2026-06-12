@@ -1,16 +1,14 @@
 // src/app.ts
-import { GithubOutlined, UserOutlined } from '@ant-design/icons';
+import { UserOutlined } from '@ant-design/icons';
 import {
   AxiosResponse,
   history,
   RequestConfig,
   RunTimeLayoutConfig,
-  useModel,
 } from '@umijs/max';
 import { Avatar, Button, Dropdown, MenuProps } from 'antd';
 import { useRef, useState } from 'react';
-import { GlobalType, ThemeType } from './access';
-import ThemeSwitcher from './component/ThemeSwitcher';
+import { GlobalType } from './access';
 import { userInfo } from './services/authController';
 
 // 白名单路由，不拦截（如登录页）
@@ -18,22 +16,20 @@ const loginWhiteList = ['/login'];
 
 export async function getInitialState(): Promise<GlobalType> {
   const token = localStorage.getItem('token');
-  const theme: ThemeType =
-    localStorage.getItem('vite-ui-theme') === 'dark' ? 'dark' : 'light';
   // 无 token，跳转登录
   if (!token) {
     const { location } = history;
     if (!loginWhiteList.includes(location.pathname)) {
       history.push('/login');
     }
-    return { authVO: undefined, theme };
+    return { authVO: undefined };
   }
 
   // 有 token，尝试获取用户信息
   try {
     const res = await userInfo();
     if (res?.data) {
-      return { authVO: res.data, theme };
+      return { authVO: res.data };
     }
   } catch (e) {
     console.error('获取用户信息失败:', e);
@@ -41,11 +37,10 @@ export async function getInitialState(): Promise<GlobalType> {
 
   // 如果获取失败，跳转登录页
   history.push('/login');
-  return { authVO: undefined, theme };
+  return { authVO: undefined };
 }
 
 export const layout: RunTimeLayoutConfig = ({ initialState }) => {
-  const { menuCollapsed, setMenuCollapsed } = useModel('collapsed');
   const logout = () => {
     localStorage.removeItem('token');
     history.push('/login');
@@ -63,28 +58,13 @@ export const layout: RunTimeLayoutConfig = ({ initialState }) => {
     },
   ];
   return {
-    title: 'AI知识库',
+    title: 'AI 知识库',
     logo: process.env.UMI_APP_LOGO,
     menu: {
       locale: false,
-      type: 'group',
     },
-    collapsed: menuCollapsed,
-    onCollapse: (value) => {
-      setMenuCollapsed(value);
-    },
-    layout: 'mix',
-    actionsRender: () => [
-      <ThemeSwitcher key="theme-switch" />,
-      <GithubOutlined
-        key="GitHub"
-        onClick={() => {
-          if (process.env.UMI_APP_GITHUB_REPOSITORY) {
-            history.push(process.env.UMI_APP_GITHUB_REPOSITORY);
-          }
-        }}
-      />,
-    ],
+    layout: 'sider',
+    actionsRender: () => [],
     avatarProps: {
       render: () => {
         return (
@@ -94,6 +74,7 @@ export const layout: RunTimeLayoutConfig = ({ initialState }) => {
                 width: 'max-content',
                 display: 'flex',
                 gap: '10px',
+                alignItems: 'center',
               }}
             >
               <Avatar icon={<UserOutlined />} />
