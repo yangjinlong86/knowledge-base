@@ -242,7 +242,7 @@ public interface LLMService {
 	 * 由 AIChatServiceImpl#multimodalChat 使用。
 	 * @return 新构建的 ChatModel 实例
 	 */
-	ChatModel getMultimodalModel();
+	ChatModel getMultimodalChatModel();
 
 	/**
 	 * 获取向量化（embedding）模型。 对应 llm.yml 中 {@code embedding.*} 配置，走本地 Ollama（默认 bge-m3）。
@@ -398,7 +398,7 @@ public class LLMServiceImpl implements LLMService {
 	}
 
 	@Override
-	public ChatModel getMultimodalModel() {
+	public ChatModel getMultimodalChatModel() {
 		// 多模态对话模型：同样走 OpenAI 协议，配置来自 chat.multimodal.*
 		OpenAiApi openAiApi = OpenAiApi.builder().baseUrl(multimodalBaseUrl).apiKey(multimodalApiKey).build();
 		return OpenAiChatModel.builder()
@@ -463,7 +463,7 @@ git commit -m "feat(llm): build three OpenAI ChatModels manually from llm.yml"
 
 Read `knowledge-base-system/src/main/java/org/nodoer/system/service/ai/impl/AIChatServiceImpl.java`，确认：
 - `simpleChat` 第 60 行：`ChatModel chatModel = null;// llmService.getChatModel();`
-- `multimodalChat` 第 76 行：`ChatModel chatModel = null;// llmService.getMultimodalModel();`
+- `multimodalChat` 第 76 行：`ChatModel chatModel = null;// llmService.getMultimodalChatModel();`
 - `simpleRAGChat` 第 102 行：`ChatModel chatModel = null;// llmService.getChatModel();`
 
 - [ ] **Step 2: 替换第 60 行（simpleChat）**
@@ -482,12 +482,12 @@ Read `knowledge-base-system/src/main/java/org/nodoer/system/service/ai/impl/AICh
 
 将：
 ```java
-		ChatModel chatModel = null;// llmService.getMultimodalModel();
+		ChatModel chatModel = null;// llmService.getMultimodalChatModel();
 ```
 替换为：
 ```java
 		// 多模态对话：走 llm.yml chat.multimodal.* 配置的 OpenAI 协议模型
-		ChatModel chatModel = llmService.getMultimodalModel();
+		ChatModel chatModel = llmService.getMultimodalChatModel();
 ```
 
 - [ ] **Step 4: 替换第 102 行（simpleRAGChat）**
@@ -604,5 +604,5 @@ mvn -pl knowledge-base-system spring-boot:run
 ### 3. 类型一致性
 
 - `LLMService` 接口的 4 个 getter 签名（Task 4）与 `LLMServiceImpl` 的实现（Task 5）一致
-- `AIChatServiceImpl` 调用的方法名（`getChatModel` / `getMultimodalModel`，Task 6）与接口定义一致
+- `AIChatServiceImpl` 调用的方法名（`getChatModel` / `getMultimodalChatModel`，Task 6）与接口定义一致
 - `OpenAiApi`、`OpenAiChatModel`、`OpenAiChatOptions`、`OllamaApi`、`OllamaEmbeddingModel`、`OllamaOptions` 包路径在 Task 5 与现有代码一致

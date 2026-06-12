@@ -28,8 +28,8 @@ public interface LLMService {
 	ChatModel getChatModel();
 
 	/**
-	 * 获取超长上下文对话模型。 对应 llm.yml 中 {@code chat.long.*} 配置，走 OpenAI 协议（经 One-API 路由）。 当前
-	 * AIChatServiceImpl 暂未调用，仅作为扩展位点保留。
+	 * 获取超长上下文对话模型。 对应 llm.yml 中 {@code chat.long.*} 配置，走 OpenAI 协议（经 One-API 路由）。 为
+	 * 长上下文场景预留的扩展位点。
 	 * @return 新构建的 ChatModel 实例
 	 */
 	ChatModel getLongContextChatModel();
@@ -39,7 +39,7 @@ public interface LLMService {
 	 * AIChatServiceImpl#multimodalChat 使用。
 	 * @return 新构建的 ChatModel 实例
 	 */
-	ChatModel getMultimodalModel();
+	ChatModel getMultimodalChatModel();
 
 	/**
 	 * 获取向量化（embedding）模型。 对应 llm.yml 中 {@code embedding.*} 配置，走本地 Ollama（默认 bge-m3）。
