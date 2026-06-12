@@ -113,22 +113,24 @@ public class OriginFileResourceServiceImpl extends ServiceImpl<OriginFileResourc
 	@Transactional(rollbackFor = Exception.class)
 	@Override
 	public Long uploadFile(MultipartFile file, String knowledgeId) {
-		// 1. 先上传文件至MinIO
-		// OriginFileResource upload = this.upload(file, KNOWLEDGE_BUCKET_NAME);
-		// 2. 存储到数据库
+		// 1. 先上传文件至 MinIO 并写入 origin_file_source 表；返回的 id 必须回填到
+		// document_entity.resource_id，否则 DocumentEntityServiceImpl#transfer 在
+		// GET /document/list 时会因 selectById("") 返回 null 而 NPE。
+		OriginFileResource upload = this.upload(file, KNOWLEDGE_BUCKET_NAME);
+
+		// 2. 写入 document_entity，关联到刚刚上传的 OriginFileResource
 		DocumentEntity documentEntity = new DocumentEntity();
 		documentEntity.setFileName(file.getOriginalFilename());
 		documentEntity.setBaseId(knowledgeId);
-		documentEntity.setPath("");
+		documentEntity.setPath(upload.getPath());
 		documentEntity.setIsEmbedding(false);
-		documentEntity.setResourceId("");
+		documentEntity.setResourceId(upload.getId());
 		documentEntityMapper.insert(documentEntity);
-		// 3. 向量化：读取文件内容并使用 MarkdownAutoSplitter 按结构语义切分
+
+		// 3. 向量化：Tika 读取 MultipartFile 字节流（保留简化路径，不再从 MinIO 拉文件）
 		Resource resource;
 		try {
 			InputStream inputStream = file.getInputStream();
-			// InputStream inputStream =
-			// objectStoreService.getFile(upload.getBucketName(), upload.getObjectName());
 			resource = new ByteArrayResource(inputStream.readAllBytes());
 		}
 		catch (IOException e) {
@@ -152,6 +154,7 @@ public class OriginFileResourceServiceImpl extends ServiceImpl<OriginFileResourc
 		}).toList();
 		VectorStore vectorStore = llmService.getVectorStore();
 		vectorStore.accept(hasMetaDocumentList);
+
 		// 4. 更新
 		documentEntity.setIsEmbedding(true);
 		documentEntityMapper.updateById(documentEntity);
