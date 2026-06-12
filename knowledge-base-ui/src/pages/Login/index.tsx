@@ -5,22 +5,13 @@ import {
   ProFormCheckbox,
 } from '@ant-design/pro-components';
 import { history, useRequest, useSearchParams } from '@umijs/max';
-import { message, Tabs, theme } from 'antd';
-import { CSSProperties, useState } from 'react';
+import { message, Tabs } from 'antd';
+import { useState } from 'react';
 import UsernamePassword from './components/UsernamePassword';
 type LoginType = 'email' | 'account';
 
 const LoginPage = () => {
-  const { token } = theme.useToken();
   const [searchParams] = useSearchParams();
-
-  const iconStyles: CSSProperties = {
-    marginInlineStart: '16px',
-    color: token.colorTextBase,
-    fontSize: '24px',
-    verticalAlign: 'middle',
-    cursor: 'pointer',
-  };
   const [messageApi, contextHolder] = message.useMessage();
   const [loginType, setLoginType] = useState<LoginType>('account');
   const { loading, run: doLogin } = useRequest(
@@ -56,25 +47,27 @@ const LoginPage = () => {
   return (
     <>
       {contextHolder}
-      <div style={{ backgroundColor: token.colorBgContainer, height: '100vh' }}>
+      <div
+        style={{
+          backgroundColor: '#f5f7fa',
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
         <LoginFormPage<API.UserLoginVO>
           loading={loading}
           onFinish={handleLoginFinish}
           logo={process.env.UMI_APP_LOGO}
-          backgroundVideoUrl="https://gw.alipayobjects.com/v/huamei_gcee1x/afts/video/jXRBRK_VAwoAAAAAAAAAAAAAK4eUAQBr"
           title={process.env.UMI_APP_NAME}
-          containerStyle={{
-            backgroundColor: 'rgba(0, 0, 0,0.65)',
-            backdropFilter: 'blur(4px)',
-            color: token.colorText,
-          }}
           subTitle={process.env.UMI_APP_SUB_TITLE}
-          // actions={
-          //   <Space style={{ marginTop: '10px' }}>
-          //     其他登录方式:
-          //     <GithubOutlined style={iconStyles}  />
-          //   </Space>
-          // }
+          containerStyle={{
+            backgroundColor: '#ffffff',
+            boxShadow: '0 4px 24px rgba(0, 0, 0, 0.06)',
+            borderRadius: 8,
+          }}
+          backgroundImageUrl=""
         >
           <Tabs
             centered
@@ -86,15 +79,6 @@ const LoginPage = () => {
                 key: 'account',
                 children: <UsernamePassword />,
               },
-              // {
-              //   label: '邮箱登录',
-              //   key: 'email',
-              //   children: (
-              //     <>
-              //       <EmailCaptcha />
-              //     </>
-              //   ),
-              // },
             ]}
           ></Tabs>
 
@@ -106,13 +90,6 @@ const LoginPage = () => {
             <ProFormCheckbox noStyle name="autoLogin">
               自动登录
             </ProFormCheckbox>
-            {/* <a
-            style={{
-              float: 'right',
-            }}
-          >
-            忘记密码
-          </a> */}
           </div>
         </LoginFormPage>
       </div>
