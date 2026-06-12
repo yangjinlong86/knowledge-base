@@ -50,7 +50,7 @@ const ChatBottombar = (props: Props) => {
               background: 'transparent',
               outline: 'none',
               boxShadow: 'none',
-              color: 'rgba(235, 248, 255, 0.92)',
+              color: '#1f2937',
             }}
             placeholder="询问任何问题"
             onChange={(e) => {
