@@ -3,7 +3,7 @@ import {
   removeChatConversation,
 } from '@/services/chatConversationController';
 import { simpleKnowledgeBase } from '@/services/knowledgeBaseController';
-import { DeleteOutlined, PlusSquareTwoTone } from '@ant-design/icons';
+import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { useModel } from '@umijs/max';
 import {
   Button,
@@ -22,22 +22,10 @@ import './index.css';
 type MenuItem = GetProp<MenuProps, 'items'>[number];
 
 const chatOptions = [
-  {
-    value: 'simple',
-    label: '简单对话',
-  },
-  {
-    value: 'simpleRAG',
-    label: '简单RAG对话',
-  },
-  {
-    value: 'multimodal',
-    label: '多模态对话',
-  },
-  {
-    value: 'multimodalRAG',
-    label: '多模态RAG对话',
-  },
+  { value: 'simple', label: '简单对话' },
+  { value: 'simpleRAG', label: '简单 RAG 对话' },
+  { value: 'multimodal', label: '多模态对话' },
+  { value: 'multimodalRAG', label: '多模态 RAG 对话' },
 ];
 const ChatConversation = () => {
   const {
@@ -59,7 +47,6 @@ const ChatConversation = () => {
     try {
       const res = await simpleKnowledgeBase();
       if (res.code === 0 && res.data) {
-        // 知识库选项
         const options = res.data.map((item) => ({
           value: item.id ?? '',
           label: item.name ?? '',
@@ -90,7 +77,7 @@ const ChatConversation = () => {
                     await removeConversation(item);
                   }}
                 >
-                  <DeleteOutlined style={{ color: '#ff4d7d' }} />
+                  <DeleteOutlined style={{ color: '#ff4d4f' }} />
                 </Popconfirm>
               </Tooltip>
             ),
@@ -140,10 +127,8 @@ const ChatConversation = () => {
         >
           <Button
             type="primary"
-            style={{
-              width: '100%',
-            }}
-            icon={<PlusSquareTwoTone />}
+            style={{ width: '100%' }}
+            icon={<PlusOutlined />}
             onClick={() => {
               setCurConverstationId('');
             }}
