@@ -1,7 +1,6 @@
 package org.nodoer.system.service.ai.impl;
 
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.nodoer.system.service.ai.LLMService;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
@@ -31,7 +30,10 @@ import org.springframework.stereotype.Service;
  * {@code chat.multimodal.*}。</li>
  * <li>EmbeddingModel 走本地 Ollama（默认 {@code bge-m3}），配置来自 {@code embedding.*}。</li>
  * <li>所有模型都"按需构建"——每次调用 getter 都新建一个实例。 builder 本身开销很小，且底层 HTTP client 在 OpenAiApi /
- * OllamaApi 内部惰性创建；如未来出现性能瓶颈再考虑缓存。</li>
+ * OllamaApi 内部惰性创建；如未来出现性能瓶颈再考虑缓存。 注意 {@link #getVectorStore()} 内部会顺带重建
+ * {@link EmbeddingModel} 与 {@link PgVectorStore}，重建 PgVectorStore 不便宜（持有
+ * JdbcTemplate、初始化阶段会建表）， 调用方应自行缓存（{@code AIChatServiceImpl} 是 {@code @Service} 单例，理想做法是把
+ * VectorStore 提升为字段）。</li>
  * <li>之所以全部手动 build 而不是依赖 starter 自动装配： 项目里有三套独立的 chat 配置（base-url / api-key / model 各异），
  * Spring AI 的自动装配每个 provider 只能产出一个 ChatModel Bean，表达不了这种 "1 个 provider × 多套配置" 的需求。 因此在
  * application.yml 里把 chat / embedding 的自动装配关掉（{@code spring.ai.model.chat=none} 与
@@ -39,7 +41,6 @@ import org.springframework.stereotype.Service;
  * </ol>
  */
 @Service
-@Slf4j
 @RequiredArgsConstructor
 public class LLMServiceImpl implements LLMService {
 
@@ -92,31 +93,32 @@ public class LLMServiceImpl implements LLMService {
 
 	@Override
 	public ChatModel getChatModel() {
-		// 通用对话模型：走 OpenAI 协议，base-url / api-key / model 全来自 llm.yml 的 chat.simple.*
-		OpenAiApi openAiApi = OpenAiApi.builder().baseUrl(simpleBaseUrl).apiKey(simpleApiKey).build();
-		return OpenAiChatModel.builder()
-			.openAiApi(openAiApi)
-			.defaultOptions(OpenAiChatOptions.builder().model(simpleModel).build())
-			.build();
+		return buildOpenAiChatModel(simpleBaseUrl, simpleApiKey, simpleModel);
 	}
 
 	@Override
 	public ChatModel getLongContextChatModel() {
-		// 超长上下文对话模型：同样走 OpenAI 协议，配置来自 chat.long.*
-		OpenAiApi openAiApi = OpenAiApi.builder().baseUrl(longBaseUrl).apiKey(longApiKey).build();
-		return OpenAiChatModel.builder()
-			.openAiApi(openAiApi)
-			.defaultOptions(OpenAiChatOptions.builder().model(longModel).build())
-			.build();
+		return buildOpenAiChatModel(longBaseUrl, longApiKey, longModel);
 	}
 
 	@Override
 	public ChatModel getMultimodalChatModel() {
-		// 多模态对话模型：同样走 OpenAI 协议，配置来自 chat.multimodal.*
-		OpenAiApi openAiApi = OpenAiApi.builder().baseUrl(multimodalBaseUrl).apiKey(multimodalApiKey).build();
+		return buildOpenAiChatModel(multimodalBaseUrl, multimodalApiKey, multimodalModel);
+	}
+
+	/**
+	 * 构建一个走 OpenAI 协议（经 One-API 路由）的 ChatModel。 三个 ChatModel getter 都委托到这里，差异只剩 base-url
+	 * / api-key / model 三组配置。
+	 * @param baseUrl OpenAI 兼容端点
+	 * @param apiKey 对应端点的 API key
+	 * @param model 要调用的具体模型名
+	 * @return 新构建的 {@link OpenAiChatModel} 实例
+	 */
+	private OpenAiChatModel buildOpenAiChatModel(String baseUrl, String apiKey, String model) {
+		OpenAiApi openAiApi = OpenAiApi.builder().baseUrl(baseUrl).apiKey(apiKey).build();
 		return OpenAiChatModel.builder()
 			.openAiApi(openAiApi)
-			.defaultOptions(OpenAiChatOptions.builder().model(multimodalModel).build())
+			.defaultOptions(OpenAiChatOptions.builder().model(model).build())
 			.build();
 	}
 
@@ -133,6 +135,7 @@ public class LLMServiceImpl implements LLMService {
 	@Override
 	public VectorStore getVectorStore() {
 		// 用上面手动构建的 EmbeddingModel 作为 embedding 提供方，其它参数沿用 pgvector 自动装配读到的属性
+		// 调用方应自行缓存此返回值，避免每次请求都重建（见类 Javadoc 第 3 条）
 		return PgVectorStore.builder(jdbcTemplate, this.getEmbeddingModel())
 			.initializeSchema(pgVectorStoreProperties.isInitializeSchema())
 			.dimensions(pgVectorStoreProperties.getDimensions())
