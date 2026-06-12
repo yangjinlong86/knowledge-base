@@ -57,7 +57,8 @@ public class AIChatServiceImpl implements AIChatService {
 
 	@Override
 	public Flux<ChatResponse> simpleChat(ChatMessageVO chatMessageVO) {
-		ChatModel chatModel = null;// llmService.getChatModel();
+		// 通用对话：走 llm.yml chat.simple.* 配置的 OpenAI 协议模型
+		ChatModel chatModel = llmService.getChatModel();
 		// 构建Meta信息
 		HashMap<String, Object> params = new HashMap<>();
 		params.put(CHAT_CONVERSATION_NAME, chatMessageVO.getConversationId());
@@ -73,7 +74,8 @@ public class AIChatServiceImpl implements AIChatService {
 
 	@Override
 	public Flux<ChatResponse> multimodalChat(ChatMessageVO chatMessageVO) {
-		ChatModel chatModel = null;// llmService.getMultimodalChatModel();
+		// 多模态对话：走 llm.yml chat.multimodal.* 配置的 OpenAI 协议模型
+		ChatModel chatModel = llmService.getMultimodalChatModel();
 		List<String> resourceIds = chatMessageVO.getResourceIds();
 		ChatClient chatClient = ChatClient.builder(chatModel).build();
 		HashMap<String, Object> params = new HashMap<>();
@@ -99,7 +101,8 @@ public class AIChatServiceImpl implements AIChatService {
 
 	@Override
 	public Flux<ChatResponse> simpleRAGChat(ChatMessageVO chatMessageVO, List<String> baseIds) {
-		ChatModel chatModel = null;// llmService.getChatModel();
+		// RAG 对话同样使用通用对话模型；检索通路由下方 QuestionAnswerAdvisor 接管
+		ChatModel chatModel = llmService.getChatModel();
 		// 构建Meta信息
 		ChatClient chatClient = ChatClient.builder(chatModel).build();
 		PromptTemplate template = new PromptTemplate(ragPromptResource);
