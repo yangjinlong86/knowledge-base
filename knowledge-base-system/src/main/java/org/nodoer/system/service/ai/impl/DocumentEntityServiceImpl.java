@@ -137,10 +137,14 @@ public class DocumentEntityServiceImpl implements DocumentEntityService {
 
 	private List<DocumentVO> transfer(List<DocumentEntity> documentEntities) {
 		return documentEntities.stream().map(item -> {
-			String resourceId = item.getResourceId();
-			OriginFileResource originFileResource = originFileResourceMapper.selectById(resourceId);
-			String path = objectStoreService.getTmpFileUrl(originFileResource.getBucketName(),
-					originFileResource.getObjectName());
+            String path = "";
+            String fileType = "";
+			OriginFileResource originFileResource = originFileResourceMapper.selectById(item.getResourceId());
+            if(originFileResource != null) {
+                path = objectStoreService.getTmpFileUrl(originFileResource.getBucketName(),
+                        originFileResource.getObjectName());
+                fileType = originFileResource.getContentType();
+            }
 			KnowledgeBase knowledgeBase = knowledgeBaseMapper.selectById(item.getBaseId());
 			DocumentVO documentVO = new DocumentVO();
 			documentVO.setId(item.getId());
@@ -149,7 +153,7 @@ public class DocumentEntityServiceImpl implements DocumentEntityService {
 			documentVO.setBaseId(item.getBaseId());
 			documentVO.setPath(path);
 			documentVO.setKnowledgeBaseName(knowledgeBase.getName());
-			documentVO.setFileType(originFileResource.getContentType());
+			documentVO.setFileType(fileType);
 			documentVO.setUploadTime(item.getCreateTime());
 			return documentVO;
 		}).toList();
