@@ -4,9 +4,9 @@ spring:
   config:
     import: classpath:llm.yml
   ai:
-    openai:
-      base-url: http://localhost:11434
-      api-key: 123
+    # 注意：本项目 chat / embedding 模型全部由 LLMServiceImpl 手动 build（配置来自 llm.yml），
+    # 因此这里不再设置 spring.ai.openai.* 与 spring.ai.ollama.*。
+    # pgvector 仍然依赖 Spring AI 自动装配，所以保留 vectorstore.pgvector 配置。
     vectorstore:
       pgvector:
         initialize-schema: true
@@ -16,7 +16,7 @@ spring:
   datasource:
     username: pguser
     password: 123456
-    url: jdbc:postgresql://localhost:5432/knowledge_db?currentSchema=public
+    url: jdbc:postgresql://localhost:5432/pgtest?currentSchema=public
 
 # MinIO
 minio:
