@@ -32,7 +32,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
@@ -94,7 +93,21 @@ public class OriginFileResourceServiceImpl extends ServiceImpl<OriginFileResourc
 	@Transactional(rollbackFor = Exception.class)
 	@Override
 	public String uploadFile(MultipartFile file) {
-		OriginFileResource upload = this.upload(file, CHAT_BUCKET_NAME);
+		// 入口一次性预读：StandardMultipartFile 的 transferTo() 是 move 语义，
+		// 一次上传路径里只能在 helper 内部消费一次字节流。提前缓存到 byte[]。
+		String originalFilename = file.getOriginalFilename();
+		String contentType = file.getContentType();
+		byte[] content;
+		try {
+			content = file.getBytes();
+		}
+		catch (IOException e) {
+			throw new BusinessException(CoreCode.SYSTEM_ERROR, e.getMessage());
+		}
+		OriginFileResource upload = this.upload(originalFilename, content, CHAT_BUCKET_NAME);
+		// chat 路径需要 isImage 区分（多模态聊天按 image / file 走不同处理）
+		upload.setIsImage(contentType != null && contentType.startsWith("image"));
+		this.saveOrUpdate(upload);
 		return upload.getId();
 	}
 
@@ -106,6 +119,13 @@ public class OriginFileResourceServiceImpl extends ServiceImpl<OriginFileResourc
 	 * Markdown 结构切分文本，最后写入向量库。 MarkdownAutoSplitter 会尽量保留标题层级和表格结构，避免通用文本切分破坏 Markdown
 	 * 语义。
 	 * </p>
+	 *
+	 * <p>
+	 * 关键约束：{@link MultipartFile} 在 StandardMultipartFile 实现下，{@code transferTo()} 是 move
+	 * 语义， 一旦 move 成功原始 temp 文件就被删除，{@code getInputStream()} 再次调用会抛
+	 * {@code IOException}。本方法在入口一次性 {@code file.getBytes()} 把字节缓存到
+	 * {@code byte[]}，{@code upload()} 助手和 Tika 读取都消费这份缓存，不再依赖 已被 move 走的 MultipartFile。
+	 * </p>
 	 * @param file 用户上传的原始文件
 	 * @param knowledgeId 目标知识库 ID
 	 * @return 数据库中的文档实体 ID
@@ -113,29 +133,32 @@ public class OriginFileResourceServiceImpl extends ServiceImpl<OriginFileResourc
 	@Transactional(rollbackFor = Exception.class)
 	@Override
 	public Long uploadFile(MultipartFile file, String knowledgeId) {
-		// 1. 先上传文件至 MinIO 并写入 origin_file_source 表；返回的 id 必须回填到
+		// 0. 入口预读：缓存到 byte[] 之后才能既给 upload() 助手用、也给 Tika 用
+		String originalFilename = file.getOriginalFilename();
+		byte[] content;
+		try {
+			content = file.getBytes();
+		}
+		catch (IOException e) {
+			throw new BusinessException(CoreCode.SYSTEM_ERROR, e.getMessage());
+		}
+
+		// 1. 上传至 MinIO 并写入 origin_file_source 表；返回的 id 必须回填到
 		// document_entity.resource_id，否则 DocumentEntityServiceImpl#transfer 在
 		// GET /document/list 时会因 selectById("") 返回 null 而 NPE。
-		OriginFileResource upload = this.upload(file, KNOWLEDGE_BUCKET_NAME);
+		OriginFileResource upload = this.upload(originalFilename, content, KNOWLEDGE_BUCKET_NAME);
 
 		// 2. 写入 document_entity，关联到刚刚上传的 OriginFileResource
 		DocumentEntity documentEntity = new DocumentEntity();
-		documentEntity.setFileName(file.getOriginalFilename());
+		documentEntity.setFileName(originalFilename);
 		documentEntity.setBaseId(knowledgeId);
 		documentEntity.setPath(upload.getPath());
 		documentEntity.setIsEmbedding(false);
 		documentEntity.setResourceId(upload.getId());
 		documentEntityMapper.insert(documentEntity);
 
-		// 3. 向量化：Tika 读取 MultipartFile 字节流（保留简化路径，不再从 MinIO 拉文件）
-		Resource resource;
-		try {
-			InputStream inputStream = file.getInputStream();
-			resource = new ByteArrayResource(inputStream.readAllBytes());
-		}
-		catch (IOException e) {
-			throw new BusinessException(CoreCode.SYSTEM_ERROR, e.getMessage());
-		}
+		// 3. 向量化：Tika 直接读预读的 bytes（不再调 file.getInputStream()）
+		Resource resource = new ByteArrayResource(content);
 		// 使用 Apache Tika 从原始文件中提取正文文本
 		TikaDocumentReader tikaDocumentReader = new TikaDocumentReader(resource);
 		List<Document> rawDocumentList = tikaDocumentReader.read();
@@ -178,16 +201,30 @@ public class OriginFileResourceServiceImpl extends ServiceImpl<OriginFileResourc
 		}).toList();
 	}
 
-	private OriginFileResource upload(MultipartFile file, String bucketName) {
-		String originalFilename = file.getOriginalFilename();
+	/**
+	 * 把字节流上传至 MinIO 并写入 origin_file_source 表。
+	 *
+	 * <p>
+	 * 接收 {@code byte[]} 而非 {@link MultipartFile}：Spring 的
+	 * {@code StandardMultipartFile.transferTo(File)} 内部是 move 而非 copy， 一旦 move 成功，原始
+	 * multipart temp 文件就被删，调用方再读 {@code MultipartFile.getInputStream()} /
+	 * {@code MultipartFile.getBytes()} 会抛 {@code IOException}。所有调用方必须在入口预读 bytes，再传进来。
+	 * </p>
+	 * @param originalFilename 原始文件名（用于写入 origin_file_source.fileName 与 objectName 拼接）
+	 * @param content 文件字节流
+	 * @param bucketName MinIO 桶名
+	 * @return 写入数据库后的 OriginFileResource（含 id）
+	 */
+	private OriginFileResource upload(String originalFilename, byte[] content, String bucketName) {
 		String objectName = objectNameWithUserId(originalFilename);
 		String id = FileUtil.generatorFileId(bucketName, objectName);
 		String newObjectName = String.format("%s/%s", objectName, id);
 		String path;
 		String md5;
 		try {
-			File tmpFile = FileUtil.createTempFile("know", "_" + file.getOriginalFilename());
-			file.transferTo(tmpFile);
+			File tmpFile = FileUtil.createTempFile("know", "_" + originalFilename);
+			// 直接把字节写到临时文件，绕开 MultipartFile.transferTo() 的 move 副作用
+			Files.write(tmpFile.toPath(), content);
 			md5 = FileUtil.md5(tmpFile);
 			path = objectStoreService.uploadFile(tmpFile, bucketName, newObjectName);
 		}
@@ -202,7 +239,9 @@ public class OriginFileResourceServiceImpl extends ServiceImpl<OriginFileResourc
 		originFileResource.setId(fileInfo.getId());
 		originFileResource.setBucketName(bucketName);
 		originFileResource.setObjectName(newObjectName);
-		originFileResource.setIsImage(file.getContentType() != null && file.getContentType().startsWith("image"));
+		// isImage 需要 contentType 才能判断；新签名不传 MultipartFile，固定 false。
+		// 真正需要 isImage 的调用方（chat 路径）在 helper 返回后显式覆盖。
+		originFileResource.setIsImage(false);
 		originFileResource.setSize(fileInfo.getSize());
 		originFileResource.setContentType(fileInfo.getContentType());
 		this.saveOrUpdate(originFileResource);
