@@ -42,11 +42,12 @@
             <artifactId>knowledge-base-core</artifactId>
             <version>${revision}</version>
         </dependency>
-        <!-- AI -->
-<!--        <dependency>-->
-<!--            <groupId>org.springframework.ai</groupId>-->
-<!--            <artifactId>spring-ai-starter-model-openai</artifactId>-->
-<!--        </dependency>-->
+        <!-- AI：同时引入 OpenAI 与 Ollama 两个 starter -->
+        <!-- chat 通路走 OpenAI 协议（经 One-API 路由），embedding 通路走本地 Ollama -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-model-openai</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-model-ollama</artifactId>
