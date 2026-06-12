@@ -2,9 +2,9 @@
 
 > **给执行代理：** 必须使用的子技能：superpowers:subagent-driven-development（推荐）或 superpowers:executing-plans，按任务逐步执行本计划。所有步骤使用复选框（`- [ ]`）语法跟踪进度。
 
-**目标：** 让 `knowledge-base-system` 同时引入 `spring-ai-starter-model-openai` 与 `spring-ai-starter-model-ollama`，由 `LLMServiceImpl` 手动 build 三个 OpenAI 兼容 ChatModel 与一个 Ollama EmbeddingModel，恢复 chat 通路的可用性。
+**目标：** 让 `knowledge-base-system` 同时引入 `spring-ai-starter-model-openai` 与 `spring-ai-starter-model-ollama`，由新建的 `LLMConfig`（`@Configuration`）以 `@Bean` 形式集中暴露三个 OpenAI 兼容 ChatModel 与一个 Ollama EmbeddingModel，`LLMServiceImpl` 改为门面（`@Qualifier` 注入并直接转发），恢复 chat 通路的可用性，并让 `PgVectorStore` 等下游消费者能注入到 `EmbeddingModel` bean。
 
-**架构：** 两个 starter 在 `application.yml` 中通过 `spring.ai.model.chat=none` / `spring.ai.model.embedding=none` 关闭自动装配，全部模型由 `LLMServiceImpl` 用 builder 手动构建，配置从 `llm.yml` 读取。`AIChatServiceImpl` 三处 `ChatModel = null` 替换为实际调用。
+**架构：** 两个 starter 在 `application.yml` 中通过 `spring.ai.model.chat=none` / `spring.ai.model.embedding=none` 关闭自动装配，全部模型由 `LLMConfig` 用 builder 手动构建并以 `@Bean` 形式注册，配置从 `llm.yml` 读取。`LLMServiceImpl` 是纯门面（`@RequiredArgsConstructor` 注入 4 个 Bean 并直接 `return`）。`AIChatServiceImpl` 三处 `ChatModel = null` 替换为实际调用。
 
 **技术栈：** Java 17、Spring Boot 3.5.7、Spring AI 1.0.0（OpenAI + Ollama starter）、Maven。代码遵循 `CLAUDE.md` 约定：tab 缩进、Spring Java Format、详细中文注释。
 
@@ -268,188 +268,118 @@ git commit -m "feat(llm): restore three ChatModel getters in LLMService"
 
 ---
 
-## Task 5：在 `LLMServiceImpl` 中实现三个 ChatModel builder
+## Task 5（修订）：在 `LLMConfig` 中 `@Bean` 暴露 4 个模型，`LLMServiceImpl` 改为注入转发
 
 **Files:**
+- Create: `knowledge-base-system/src/main/java/org/nodoer/system/config/LLMConfig.java`
 - Modify: `knowledge-base-system/src/main/java/org/nodoer/system/service/ai/impl/LLMServiceImpl.java`
+
+> **修订说明（Task 9 追加）**：原 Task 5 计划是 `LLMServiceImpl` 内部 builder 三个 ChatModel + 一个 EmbeddingModel；Task 8 启动验证发现 `PgVectorStoreAutoConfiguration#vectorStore` 需要注入 `EmbeddingModel`，而 `LLMServiceImpl` 内部 build 的实例未暴露成容器 bean（`spring.ai.model.embedding=none` 又关掉了 Ollama 自动装配）。本次修订：把模型构建集中到新建的 `LLMConfig`（`@Configuration`）以 `@Bean` 形式暴露，`LLMServiceImpl` 改为 `@Qualifier` 注入并直接转发（门面模式）。
 
 - [ ] **Step 1: 阅读现状**
 
-Read `knowledge-base-system/src/main/java/org/nodoer/system/service/ai/impl/LLMServiceImpl.java`。确认：
-- 三个 OpenAI ChatModel 实现段当前是被注释掉的（约第 70-99 行）
-- 三组 OpenAI 配置的 `@Value` 字段已存在（`simpleBaseUrl`/`simpleApiKey`/`simpleModel` 等）
-- 顶部 OpenAI 相关 import 被注释（约第 11-13 行）
+Read 现有 `LLMServiceImpl.java`（含 12 个 `@Value` 字段与 getter 内部 builder），确认旧实现结构。
 
-- [ ] **Step 2: 替换文件全文**
+- [ ] **Step 2: 新建 `LLMConfig.java`**
 
-将文件内容整体替换为：
+新建 `knowledge-base-system/src/main/java/org/nodoer/system/config/LLMConfig.java`（`@Configuration`），把 4 个模型以 `@Bean` 形式暴露：
 
 ```java
-package org.nodoer.system.service.ai.impl;
+@Configuration
+public class LLMConfig {
+    @Value("${chat.simple.base-url}")     private String simpleBaseUrl;
+    @Value("${chat.simple.api-key}")      private String simpleApiKey;
+    @Value("${chat.simple.model}")        private String simpleModel;
+    // ... chat.long.* / chat.multimodal.* / embedding.* 类似字段（共 12 个 @Value）...
 
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.nodoer.system.service.ai.LLMService;
-import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.embedding.EmbeddingModel;
-import org.springframework.ai.ollama.OllamaEmbeddingModel;
-import org.springframework.ai.ollama.api.OllamaApi;
-import org.springframework.ai.ollama.api.OllamaOptions;
-import org.springframework.ai.openai.OpenAiChatModel;
-import org.springframework.ai.openai.OpenAiChatOptions;
-import org.springframework.ai.openai.api.OpenAiApi;
-import org.springframework.ai.vectorstore.VectorStore;
-import org.springframework.ai.vectorstore.pgvector.PgVectorStore;
-import org.springframework.ai.vectorstore.pgvector.autoconfigure.PgVectorStoreProperties;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.stereotype.Service;
+    @Bean public ChatModel simpleChatModel()      { return buildOpenAiChatModel(simpleBaseUrl, simpleApiKey, simpleModel); }
+    @Bean public ChatModel longContextChatModel() { /* chat.long.* */ }
+    @Bean public ChatModel multimodalChatModel()  { /* chat.multimodal.* */ }
 
-/**
- * {@link LLMService} 的默认实现。
- *
- * <p>
- * 设计要点：
- * </p>
- * <ol>
- * <li>三个 ChatModel（simple / long / multimodal）统一走 OpenAI 协议，经
- * <a href="https://github.com/songquanpeng/one-api">One-API</a> 路由到任意 OpenAI 兼容后端，
- * 配置分别来自 {@code llm.yml} 的 {@code chat.simple.*} / {@code chat.long.*} /
- * {@code chat.multimodal.*}。</li>
- * <li>EmbeddingModel 走本地 Ollama（默认 {@code bge-m3}），配置来自 {@code embedding.*}。</li>
- * <li>所有模型都"按需构建"——每次调用 getter 都新建一个实例。 builder 本身开销很小，且底层 HTTP client 在 OpenAiApi /
- * OllamaApi 内部惰性创建；如未来出现性能瓶颈再考虑缓存。</li>
- * <li>之所以全部手动 build 而不是依赖 starter 自动装配： 项目里有三套独立的 chat 配置（base-url / api-key / model 各异），
- * Spring AI 的自动装配每个 provider 只能产出一个 ChatModel Bean，表达不了这种 "1 个 provider × 多套配置"
- * 的需求。 因此在 application.yml 里把 chat / embedding 的自动装配关掉（{@code spring.ai.model.chat=none}
- * 与 {@code spring.ai.model.embedding=none}），手工接管。</li>
- * </ol>
- */
-@Service
-@Slf4j
-@RequiredArgsConstructor
-public class LLMServiceImpl implements LLMService {
+    @Bean public EmbeddingModel embeddingModel() {
+        OllamaApi api = OllamaApi.builder().baseUrl(embeddingBaseUrl).build();
+        return OllamaEmbeddingModel.builder()
+            .ollamaApi(api)
+            .defaultOptions(OllamaOptions.builder().model(embeddingModel).build())
+            .build();
+    }
 
-	// ====== chat.simple.* ：通用对话模型配置 ======
-
-	@Value("${chat.simple.base-url}")
-	private String simpleBaseUrl;
-
-	@Value("${chat.simple.api-key}")
-	private String simpleApiKey;
-
-	@Value("${chat.simple.model}")
-	private String simpleModel;
-
-	// ====== chat.long.* ：超长上下文对话模型配置 ======
-
-	@Value("${chat.long.base-url}")
-	private String longBaseUrl;
-
-	@Value("${chat.long.api-key}")
-	private String longApiKey;
-
-	@Value("${chat.long.model}")
-	private String longModel;
-
-	// ====== chat.multimodal.* ：多模态对话模型配置 ======
-
-	@Value("${chat.multimodal.base-url}")
-	private String multimodalBaseUrl;
-
-	@Value("${chat.multimodal.api-key}")
-	private String multimodalApiKey;
-
-	@Value("${chat.multimodal.model}")
-	private String multimodalModel;
-
-	// ====== embedding.* ：向量化模型配置（本地 Ollama） ======
-
-	@Value("${embedding.base-url}")
-	private String embeddingBaseUrl;
-
-	@Value("${embedding.model}")
-	private String embeddingModel;
-
-	/** PgVectorStore 需要的 JdbcTemplate，由 Spring Boot 自动注入。 */
-	private final JdbcTemplate jdbcTemplate;
-
-	/** pgvector 自动装配读到的属性（表名 / 维度 / 距离类型等），转交给手动 build 的 PgVectorStore。 */
-	private final PgVectorStoreProperties pgVectorStoreProperties;
-
-	@Override
-	public ChatModel getChatModel() {
-		// 通用对话模型：走 OpenAI 协议，base-url / api-key / model 全来自 llm.yml 的 chat.simple.*
-		OpenAiApi openAiApi = OpenAiApi.builder().baseUrl(simpleBaseUrl).apiKey(simpleApiKey).build();
-		return OpenAiChatModel.builder()
-			.openAiApi(openAiApi)
-			.defaultOptions(OpenAiChatOptions.builder().model(simpleModel).build())
-			.build();
-	}
-
-	@Override
-	public ChatModel getLongContextChatModel() {
-		// 超长上下文对话模型：同样走 OpenAI 协议，配置来自 chat.long.*
-		OpenAiApi openAiApi = OpenAiApi.builder().baseUrl(longBaseUrl).apiKey(longApiKey).build();
-		return OpenAiChatModel.builder()
-			.openAiApi(openAiApi)
-			.defaultOptions(OpenAiChatOptions.builder().model(longModel).build())
-			.build();
-	}
-
-	@Override
-	public ChatModel getMultimodalChatModel() {
-		// 多模态对话模型：同样走 OpenAI 协议，配置来自 chat.multimodal.*
-		OpenAiApi openAiApi = OpenAiApi.builder().baseUrl(multimodalBaseUrl).apiKey(multimodalApiKey).build();
-		return OpenAiChatModel.builder()
-			.openAiApi(openAiApi)
-			.defaultOptions(OpenAiChatOptions.builder().model(multimodalModel).build())
-			.build();
-	}
-
-	@Override
-	public EmbeddingModel getEmbeddingModel() {
-		// 向量化模型走本地 Ollama，bge-m3（1024 维）与 pgvector 表 vector_store_bge_m3 对齐
-		OllamaApi ollamaApi = OllamaApi.builder().baseUrl(embeddingBaseUrl).build();
-		return OllamaEmbeddingModel.builder()
-			.ollamaApi(ollamaApi)
-			.defaultOptions(OllamaOptions.builder().model(embeddingModel).build())
-			.build();
-	}
-
-	@Override
-	public VectorStore getVectorStore() {
-		// 用上面手动构建的 EmbeddingModel 作为 embedding 提供方，其它参数沿用 pgvector 自动装配读到的属性
-		return PgVectorStore.builder(jdbcTemplate, this.getEmbeddingModel())
-			.initializeSchema(pgVectorStoreProperties.isInitializeSchema())
-			.dimensions(pgVectorStoreProperties.getDimensions())
-			.distanceType(pgVectorStoreProperties.getDistanceType())
-			.indexType(pgVectorStoreProperties.getIndexType())
-			.maxDocumentBatchSize(pgVectorStoreProperties.getMaxDocumentBatchSize())
-			.schemaName(pgVectorStoreProperties.getSchemaName())
-			.vectorTableName(pgVectorStoreProperties.getTableName())
-			.removeExistingVectorStoreTable(pgVectorStoreProperties.isRemoveExistingVectorStoreTable())
-			.idType(pgVectorStoreProperties.getIdType())
-			.vectorTableValidationsEnabled(pgVectorStoreProperties.isSchemaValidation())
-			.build();
-	}
-
+    private OpenAiChatModel buildOpenAiChatModel(String baseUrl, String apiKey, String model) {
+        OpenAiApi api = OpenAiApi.builder().baseUrl(baseUrl).apiKey(apiKey).build();
+        return OpenAiChatModel.builder()
+            .openAiApi(api)
+            .defaultOptions(OpenAiChatOptions.builder().model(model).build())
+            .build();
+    }
 }
 ```
 
-- [ ] **Step 3: 编译验证**
+- [ ] **Step 3: 改写 `LLMServiceImpl.java`（门面）**
+
+将 12 个 `@Value` 字段与 4 个 getter 中的 builder 代码全部移除，改为显式构造器 + `@Qualifier` 注入 4 个 Bean：
+
+```java
+@Service
+public class LLMServiceImpl implements LLMService {
+    private final ChatModel simpleChatModel;
+    private final ChatModel longContextChatModel;
+    private final ChatModel multimodalChatModel;
+    private final EmbeddingModel embeddingModel;
+    private final JdbcTemplate jdbcTemplate;
+    private final PgVectorStoreProperties pgVectorStoreProperties;
+
+    public LLMServiceImpl(@Qualifier("simpleChatModel") ChatModel simpleChatModel,
+            @Qualifier("longContextChatModel") ChatModel longContextChatModel,
+            @Qualifier("multimodalChatModel") ChatModel multimodalChatModel,
+            @Qualifier("embeddingModel") EmbeddingModel embeddingModel,
+            JdbcTemplate jdbcTemplate, PgVectorStoreProperties pgVectorStoreProperties) {
+        this.simpleChatModel = simpleChatModel;
+        this.longContextChatModel = longContextChatModel;
+        this.multimodalChatModel = multimodalChatModel;
+        this.embeddingModel = embeddingModel;
+        this.jdbcTemplate = jdbcTemplate;
+        this.pgVectorStoreProperties = pgVectorStoreProperties;
+    }
+
+    @Override public ChatModel getChatModel()              { return simpleChatModel; }
+    @Override public ChatModel getLongContextChatModel()   { return longContextChatModel; }
+    @Override public ChatModel getMultimodalChatModel()    { return multimodalChatModel; }
+    @Override public EmbeddingModel getEmbeddingModel()    { return embeddingModel; }
+
+    @Override
+    public VectorStore getVectorStore() {
+        return PgVectorStore.builder(jdbcTemplate, this.embeddingModel)
+            .initializeSchema(pgVectorStoreProperties.isInitializeSchema())
+            .dimensions(pgVectorStoreProperties.getDimensions())
+            .distanceType(pgVectorStoreProperties.getDistanceType())
+            .indexType(pgVectorStoreProperties.getIndexType())
+            .maxDocumentBatchSize(pgVectorStoreProperties.getMaxDocumentBatchSize())
+            .schemaName(pgVectorStoreProperties.getSchemaName())
+            .vectorTableName(pgVectorStoreProperties.getTableName())
+            .removeExistingVectorStoreTable(pgVectorStoreProperties.isRemoveExistingVectorStoreTable())
+            .idType(pgVectorStoreProperties.getIdType())
+            .vectorTableValidationsEnabled(pgVectorStoreProperties.isSchemaValidation())
+            .build();
+    }
+}
+```
+
+> **Lombok 注意**：不要用 `@RequiredArgsConstructor` + 字段 `@Qualifier`，Lombok 不会把字段 `@Qualifier` 透传到生成的构造器参数，启动期会报 "found 3 ChatModel beans"。
+
+- [ ] **Step 4: 编译验证**
 
 运行：
 ```bash
-mvn -pl knowledge-base-system compile -q
+mvn -pl knowledge-base-system -am compile -q
 ```
-期望：编译成功，无错误。如果 `OpenAiChatModel` / `OpenAiApi` / `OpenAiChatOptions` import 报红，说明 Task 1 的 pom 改动未生效，回到 Task 1 检查。
+期望：编译成功，无错误。
 
-- [ ] **Step 4: 提交**
+- [ ] **Step 5: 提交（与 LLMConfig 一起）**
 
 ```bash
-git add knowledge-base-system/src/main/java/org/nodoer/system/service/ai/impl/LLMServiceImpl.java
-git commit -m "feat(llm): build three OpenAI ChatModels manually from llm.yml"
+git add knowledge-base-system/src/main/java/org/nodoer/system/config/LLMConfig.java \
+        knowledge-base-system/src/main/java/org/nodoer/system/service/ai/impl/LLMServiceImpl.java
+git commit -m "refactor(llm): extract model building into LLMConfig @Bean"
 ```
 
 ---
@@ -589,6 +519,7 @@ mvn -pl knowledge-base-system spring-boot:run
 | §5 application-dev.yml 改动 | Task 3 |
 | §5 LLMService 接口改动 | Task 4 |
 | §5 LLMServiceImpl 改动 / §6.2 | Task 5 |
+| §5 LLMConfig 新建（Task 9 修订）| Task 5 |
 | §5 AIChatServiceImpl 改动 / §6.3 | Task 6 |
 | §8 构建验证 + 启动验证 | Task 7 + Task 8 |
 | §8 功能验证（gstack） | 显式跳过（API key 未就绪） |

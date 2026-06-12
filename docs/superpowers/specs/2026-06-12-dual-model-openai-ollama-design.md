@@ -40,7 +40,9 @@
 
 ## 4. 架构
 
-整体策略：**两个 starter 同时引入，但禁用它们对 ChatModel / EmbeddingModel 的自动装配，所有模型由 `LLMServiceImpl` 用 builder 手动构建，配置全部从 `llm.yml` 读取**。
+整体策略：**两个 starter 同时引入，但禁用它们对 ChatModel / EmbeddingModel 的自动装配，所有模型由 `LLMConfig` 用 builder 手动构建并以 `@Bean` 形式暴露到容器，`LLMServiceImpl` 改为门面（注入并直接转发），配置全部从 `llm.yml` 读取**。
+
+> **修订说明（Task 9）**：原设计是 `LLMServiceImpl` 内部 build 各模型，但启动期发现 `PgVectorStoreAutoConfiguration#vectorStore` 注入不到 `EmbeddingModel`（`spring.ai.model.embedding=none` 关掉了 Ollama 自动装配，而 `LLMServiceImpl` 内部 build 的实例未暴露成容器 bean）。本次把模型构建集中到 `LLMConfig` 用 `@Bean` 暴露，`LLMServiceImpl` 改为 `@Qualifier` 注入转发（门面），同时 `PgVectorStore` 仍由 `LLMServiceImpl#getVectorStore()` 内部用注入的 `EmbeddingModel` 手动 build（保持现有行为）。
 
 ```
                          ┌─────────────────────────────┐
@@ -52,16 +54,26 @@
                                         │ 禁用自动装配
                                         ▼
 ┌──────────────────────┐    ┌──────────────────────────────┐
-│ llm.yml              │    │ LLMServiceImpl               │
-│ chat.simple.*        │───▶│ getChatModel()           ────┼──▶ OpenAiChatModel（One-API）
-│ chat.long.*          │───▶│ getLongContextChatModel()────┼──▶ OpenAiChatModel（One-API）
-│ chat.multimodal.*    │───▶│ getMultimodalModel()     ────┼──▶ OpenAiChatModel（One-API）
-│ embedding.*          │───▶│ getEmbeddingModel()      ────┼──▶ OllamaEmbeddingModel
-└──────────────────────┘    │ getVectorStore()         ────┼──▶ PgVectorStore（用 embedding）
+│ llm.yml              │    │ LLMConfig（@Configuration）  │
+│ chat.simple.*        │───▶│ @Bean simpleChatModel()  ────┼──▶ OpenAiChatModel（One-API）
+│ chat.long.*          │───▶│ @Bean longContextChatModel()─┼──▶ OpenAiChatModel（One-API）
+│ chat.multimodal.*    │───▶│ @Bean multimodalChatModel()──┼──▶ OpenAiChatModel（One-API）
+│ embedding.*          │───▶│ @Bean embeddingModel()    ───┼──▶ OllamaEmbeddingModel
+└──────────────────────┘    └──────────────┬───────────────┘
+                                            │ @Qualifier 注入
+                                            ▼
+                            ┌──────────────────────────────┐
+                            │ LLMServiceImpl（门面）        │
+                            │ getChatModel()         ───────┼──▶ 直接 return 注入的 ChatModel
+                            │ getLongContextChatModel()─────┼──▶ 直接 return 注入的 ChatModel
+                            │ getMultimodalChatModel()──────┼──▶ 直接 return 注入的 ChatModel
+                            │ getEmbeddingModel()      ─────┼──▶ 直接 return 注入的 EmbeddingModel
+                            │ getVectorStore()         ─────┼──▶ PgVectorStore.builder(jdbc, embedding)
                             └──────────────────────────────┘
-                                        ▲
-                                        │
-                            ┌───────────┴────────────┐
+                                            ▲
+                                            │ 也供 PgVectorStoreAutoConfiguration 注入 embeddingModel
+                                            │
+                            ┌───────────────┴────────────┐
                             │ AIChatServiceImpl      │
                             │ simpleChat /            │
                             │ simpleRAGChat /         │
@@ -69,7 +81,7 @@
                             └────────────────────────┘
 ```
 
-辅助 Bean（`OpenAiApi`、`OllamaApi`、`PgVectorStoreAutoConfiguration` 等）由 starter 自动装配照常工作 —— 我们只是关掉了 ChatModel / EmbeddingModel 这一层。
+辅助 Bean（`OpenAiApi`、`OllamaApi`）由 starter 自动装配照常工作 —— 我们只是关掉了 ChatModel / EmbeddingModel 这一层。
 
 ## 5. 涉及的文件与改动清单
 
@@ -81,6 +93,8 @@
 | `knowledge-base-system/src/main/resources/llm.yml` | 保持不变（结构已满足需求） |
 | `knowledge-base-system/src/main/java/org/nodoer/system/service/ai/LLMService.java` | 取消三个 ChatModel getter 接口方法的注释 |
 | `knowledge-base-system/src/main/java/org/nodoer/system/service/ai/impl/LLMServiceImpl.java` | 恢复三个 ChatModel 的 builder 实现（基于 `OpenAiApi` + `OpenAiChatOptions`）；补充详细中文注释 |
+| `knowledge-base-system/src/main/java/org/nodoer/system/config/LLMConfig.java` | **Task 9 修订**：新建 `@Configuration`，集中用 `@Bean` 暴露 4 个模型（3 ChatModel + 1 EmbeddingModel），让 `PgVectorStore` 等下游消费者能注入到 `EmbeddingModel` |
+| `knowledge-base-system/src/main/java/org/nodoer/system/service/ai/impl/LLMServiceImpl.java` | **Task 9 修订**：移除 12 个 `@Value` 字段与 4 个 getter 中的 builder 代码，改为 `@Qualifier` 注入 4 个 Bean 并直接转发（门面模式） |
 | `knowledge-base-system/src/main/java/org/nodoer/system/service/ai/impl/AIChatServiceImpl.java` | 将三处 `ChatModel chatModel = null;` 改为调用对应的 `llmService.getXxxChatModel()`；补充中文注释 |
 
 **不涉及改动的文件**：`AIChatController`、其他 Service、前端 React 代码、SQL 初始化脚本。
@@ -99,25 +113,73 @@ spring:
 
 Spring AI 1.0 通过 `spring.ai.model.chat` 与 `spring.ai.model.embedding` 控制使用哪个 provider 的自动配置。设为 `none` 后两个 starter 的对应自动配置均不触发，但 `OpenAiApi`、`OllamaApi`、`PgVectorStoreAutoConfiguration` 等辅助 Bean 仍然可用。
 
-### 6.2 `LLMServiceImpl` 中三个 ChatModel 的构建
+### 6.2 模型 Bean 的构建
+
+**修订说明（Task 9）**：原设计是 `LLMServiceImpl` 在 getter 内部 builder 构建；本次重构把 4 个模型集中放到 `LLMConfig` 类中以 `@Bean` 形式暴露，`LLMServiceImpl` 改为纯门面（显式构造器 + `@Qualifier` 注入 4 个 bean 并直接 `return`）。这样 `PgVectorStore` 等下游消费者（如 `PgVectorStoreAutoConfiguration#vectorStore`）也能拿到自动注册的 `EmbeddingModel` bean。
 
 ```java
-@Override
-public ChatModel getChatModel() {
-    // 通用对话模型：经 One-API 路由到 OpenAI 兼容后端
-    OpenAiApi api = OpenAiApi.builder()
-        .baseUrl(simpleBaseUrl)
-        .apiKey(simpleApiKey)
-        .build();
-    return OpenAiChatModel.builder()
-        .openAiApi(api)
-        .defaultOptions(OpenAiChatOptions.builder().model(simpleModel).build())
+// LLMConfig.java —— 集中暴露 4 个模型 Bean
+@Bean
+public ChatModel simpleChatModel() {
+    return buildOpenAiChatModel(simpleBaseUrl, simpleApiKey, simpleModel);
+}
+
+@Bean
+public ChatModel longContextChatModel() { /* 同构 */ }
+@Bean
+public ChatModel multimodalChatModel() { /* 同构 */ }
+
+@Bean
+public EmbeddingModel embeddingModel() {
+    OllamaApi ollamaApi = OllamaApi.builder().baseUrl(embeddingBaseUrl).build();
+    return OllamaEmbeddingModel.builder()
+        .ollamaApi(ollamaApi)
+        .defaultOptions(OllamaOptions.builder().model(embeddingModel).build())
         .build();
 }
-// getLongContextChatModel / getMultimodalModel 同构，只是读取不同的 @Value 字段
 ```
 
-`getEmbeddingModel()` 保持现状（继续用 `OllamaEmbeddingModel` 手动 build，`base-url` 与 `model` 从 `embedding.*` 读取）。`getVectorStore()` 不变。
+`LLMServiceImpl` 改为（**用显式构造器，不用 Lombok 的 `@RequiredArgsConstructor`**）：
+
+```java
+@Service
+public class LLMServiceImpl implements LLMService {
+    private final ChatModel simpleChatModel;
+    private final ChatModel longContextChatModel;
+    private final ChatModel multimodalChatModel;
+    private final EmbeddingModel embeddingModel;
+    private final JdbcTemplate jdbcTemplate;
+    private final PgVectorStoreProperties pgVectorStoreProperties;
+
+    public LLMServiceImpl(@Qualifier("simpleChatModel") ChatModel simpleChatModel,
+            @Qualifier("longContextChatModel") ChatModel longContextChatModel,
+            @Qualifier("multimodalChatModel") ChatModel multimodalChatModel,
+            @Qualifier("embeddingModel") EmbeddingModel embeddingModel,
+            JdbcTemplate jdbcTemplate, PgVectorStoreProperties pgVectorStoreProperties) {
+        this.simpleChatModel = simpleChatModel;
+        this.longContextChatModel = longContextChatModel;
+        this.multimodalChatModel = multimodalChatModel;
+        this.embeddingModel = embeddingModel;
+        this.jdbcTemplate = jdbcTemplate;
+        this.pgVectorStoreProperties = pgVectorStoreProperties;
+    }
+    // 4 个 getter 直接 return 注入的字段
+}
+```
+
+> **Lombok 注意点**：不要用 `@RequiredArgsConstructor` + 字段 `@Qualifier`，Lombok 不会把字段上的 `@Qualifier` 透传到生成的构造器参数 —— 启动期 Spring 会报 `UnsatisfiedDependencyException: found 3 ChatModel beans`。本类采用显式构造器 + 参数 `@Qualifier` 解决注入歧义。
+
+`getVectorStore()` 仍 builder 构建一个 `PgVectorStore`，但注入目标改为注入的 `EmbeddingModel` 字段：
+
+```java
+return PgVectorStore.builder(jdbcTemplate, this.embeddingModel)
+    .initializeSchema(pgVectorStoreProperties.isInitializeSchema())
+    .dimensions(pgVectorStoreProperties.getDimensions())
+    // ... 其余参数同上 ...
+    .build();
+```
+
+这样既保持 `getVectorStore()` 现有的 builder 行为（`PgVectorStore` 不暴露成 `@Bean`），又让 `embeddingModel` 本身以 `@Bean` 形式对 pgvector 自动装配可见。
 
 ### 6.3 `AIChatServiceImpl` 解开 `null`
 
