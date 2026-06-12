@@ -17,10 +17,20 @@ spring:
   # 的 @Bean，与 ChatModel 共用同一个 @ConditionalOnProperty；这里关闭后 OpenAiApi 也不会被
   # 自动创建，LLMServiceImpl 改用 OpenAiApi.builder() 手动构建即可。Ollama 侧的 OllamaApi 与
   # PgVectorStore 由独立 autoconfig 创建，不受本开关影响。
+  #
+  # OpenAI starter 还带入了 audio-speech / audio-transcription / image / moderation 几类
+  # 模型，各自的 @ConditionalOnProperty 路径不一样（spring.ai.model.audio.speech 等），
+  # 也必须显式设为 none，否则它们在拿不到 spring.ai.openai.api-key 时会在启动期抛
+  # BeanCreationException。Ollama starter 只暴露 chat / embedding 两个开关，前两行已足够。
   ai:
     model:
       chat: none
       embedding: none
+      audio:
+        speech: none
+        transcription: none
+      image: none
+      moderation: none
 
   datasource:
     driver-class-name: org.postgresql.Driver
