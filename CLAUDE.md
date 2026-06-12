@@ -122,3 +122,4 @@ Resources under `knowledge-base-system/src/main/resources/`:
 - Custom business errors should throw `BusinessException(Code, message)` rather than returning error responses manually — let `GlobalExceptionHandler` do the conversion.
 - Frontend code is Prettier-formatted; husky + lint-staged run `prettier --write` on commit.
 - **代码注释必须使用中文**：生成或修改 Java / TypeScript / YAML 等任何代码时，必须为类、方法、关键字段、关键逻辑分支补充详细的中文注释（Javadoc 风格的 `/** */` 或行内 `//`）。注释要解释“为什么这么做”和“做了什么”，不要只是把代码翻译一遍。
+- **所有文档必须使用中文**：包括但不限于设计文档 (`docs/superpowers/specs/`)、实施计划 (`docs/superpowers/plans/`)、README、ADR、代码评审说明等。仓库内任何新增或修改的文档默认用中文撰写（除非用户明确要求英文）。
