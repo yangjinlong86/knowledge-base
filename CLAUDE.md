@@ -121,3 +121,4 @@ Resources under `knowledge-base-system/src/main/resources/`:
 - New entities should extend `org.nodoer.core.pojo.BaseEntity` (id, create_time, update_time, deleted, creator, updater conventions) so MyBatis-Plus optimistic-style fields stay consistent.
 - Custom business errors should throw `BusinessException(Code, message)` rather than returning error responses manually — let `GlobalExceptionHandler` do the conversion.
 - Frontend code is Prettier-formatted; husky + lint-staged run `prettier --write` on commit.
+- **代码注释必须使用中文**：生成或修改 Java / TypeScript / YAML 等任何代码时，必须为类、方法、关键字段、关键逻辑分支补充详细的中文注释（Javadoc 风格的 `/** */` 或行内 `//`）。注释要解释“为什么这么做”和“做了什么”，不要只是把代码翻译一遍。
