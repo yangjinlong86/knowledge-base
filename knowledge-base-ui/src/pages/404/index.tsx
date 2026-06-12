@@ -3,13 +3,13 @@ import { Button, Result } from 'antd';
 
 const NoFoundPage = () => {
   const goHome = () => {
-    history.push('/home');
+    history.push('/');
   };
   return (
     <Result
       status="404"
       title="404"
-      subTitle="Sorry, the page you visited does not exist."
+      subTitle="抱歉，您访问的页面不存在。"
       extra={
         <Button type="primary" onClick={goHome}>
           返回首页

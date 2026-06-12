@@ -3,13 +3,13 @@ import { Button, Result } from 'antd';
 
 const NoAuthPage = () => {
   const goHome = () => {
-    history.push('/home');
+    history.push('/');
   };
   return (
     <Result
       status="403"
       title="403"
-      subTitle="对不起，您无权限访问该页面"
+      subTitle="对不起，您无权限访问该页面。"
       extra={
         <Button type="primary" onClick={goHome}>
           返回首页
