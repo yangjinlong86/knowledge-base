@@ -126,7 +126,6 @@ const DocumentPage = () => {
     <>
       {contextHolder}
       <PageContainer
-        ghost
         title="知识库文档"
         extra={
           <Button onClick={() => navigator(-1)} type="primary">
