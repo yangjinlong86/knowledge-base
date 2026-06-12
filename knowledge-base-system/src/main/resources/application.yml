@@ -13,7 +13,10 @@ spring:
   # 项目同时引入了 spring-ai-starter-model-openai 与 spring-ai-starter-model-ollama，
   # 两个 starter 默认都会尝试装配各自的 ChatModel / EmbeddingModel Bean，从而引发冲突。
   # 本项目所有 ChatModel / EmbeddingModel 都由 LLMServiceImpl 用 builder 手动构建（配置从 llm.yml 读），
-  # 因此在这里统一关闭自动装配。OpenAiApi / OllamaApi / PgVectorStore 等辅助 Bean 不受影响，仍可使用。
+  # 因此在这里统一关闭自动装配。注意 OpenAI 侧的 OpenAiApi 也是 OpenAiChatAutoConfiguration
+  # 的 @Bean，与 ChatModel 共用同一个 @ConditionalOnProperty；这里关闭后 OpenAiApi 也不会被
+  # 自动创建，LLMServiceImpl 改用 OpenAiApi.builder() 手动构建即可。Ollama 侧的 OllamaApi 与
+  # PgVectorStore 由独立 autoconfig 创建，不受本开关影响。
   ai:
     model:
       chat: none
