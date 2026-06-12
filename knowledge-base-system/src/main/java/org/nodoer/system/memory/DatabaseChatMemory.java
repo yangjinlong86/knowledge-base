@@ -45,7 +45,14 @@ public class DatabaseChatMemory implements ChatMemory {
 		qw.orderByAsc(ChatMessage::getCreateTime);
 		qw.last(" LIMIT " + maxMessages);
 		List<ChatMessage> chatMessages = chatMessageMapper.selectList(qw);
-		log.info("context:{}", chatMessages);
+		log.info("[DEBUG-BUG] DatabaseChatMemory.get() convId={}, count={}, history={}", conversationId,
+				chatMessages.size(),
+				chatMessages.stream()
+					.map(m -> "[" + m.getMessageNo() + "," + m.getRole() + ","
+							+ (m.getContent() == null ? "null"
+									: m.getContent().substring(0, Math.min(30, m.getContent().length())))
+							+ "]")
+					.toList());
 		return chatMessageService.toMessage(chatMessages);
 	}
 
@@ -53,6 +60,8 @@ public class DatabaseChatMemory implements ChatMemory {
 	@Override
 	public void add(String conversationId, List<Message> messages) {
 		// log.info("Save Meta:{}", messages.stream().map(Content::getMetadata).toList());
+		log.info("[DEBUG-BUG] DatabaseChatMemory.add() convId={}, messages.size()={}, types={}", conversationId,
+				messages.size(), messages.stream().map(m -> m.getMetadata().get(MESSAGE_TYPE).toString()).toList());
 		ArrayList<ChatMessage> chatMessageList = new ArrayList<>();
 		for (int i = 0; i < messages.size(); i++) {
 			Message message = messages.get(i);

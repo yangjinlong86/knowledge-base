@@ -103,6 +103,8 @@ public class AIChatServiceImpl implements AIChatService {
 	public Flux<ChatResponse> simpleRAGChat(ChatMessageVO chatMessageVO, List<String> baseIds) {
 		// RAG 对话同样使用通用对话模型；检索通路由下方 QuestionAnswerAdvisor 接管
 		ChatModel chatModel = llmService.getChatModel();
+		log.info("[DEBUG-BUG] simpleRAGChat enter convId={}, userText='{}', baseIds={}",
+				chatMessageVO.getConversationId(), chatMessageVO.getContent(), baseIds);
 		// 构建Meta信息
 		ChatClient chatClient = ChatClient.builder(chatModel).build();
 		PromptTemplate template = new PromptTemplate(ragPromptResource);
@@ -120,15 +122,18 @@ public class AIChatServiceImpl implements AIChatService {
 
 		return chatClient.prompt(Prompt.builder().messages(userMessage).build())
 			.advisors(new SimpleLoggerAdvisor(),
+					// 顺序很关键：MessageChatMemoryAdvisor 必须在 QuestionAnswerAdvisor 之前跑，
+					// 否则它存进 chat_message 的就是被 RAG 模板增强过的 user 消息（augmentUserMessage 会把整段
+					// 指令模板 + 检索文档追加到 user.text），导致后续轮次的历史里出现 RAG 污染、用户问题被模板
+					// 稀释、LLM 倾向延续上一轮 assistant 而不是用 RAG 文档（Q2 答非所问就是这个原因）。
+					MessageChatMemoryAdvisor.builder(databaseChatMemory)
+						.conversationId(chatMessageVO.getConversationId())
+						.build(),
 					QuestionAnswerAdvisor.builder(llmService.getVectorStore())
 						.promptTemplate(template)
 						.searchRequest(searchRequest)
-						.build(),
-					MessageChatMemoryAdvisor.builder(databaseChatMemory)
-						.conversationId(chatMessageVO.getConversationId())
-						.build()
+						.build())
 
-			)
 			.stream()
 			.chatResponse();
 	}
