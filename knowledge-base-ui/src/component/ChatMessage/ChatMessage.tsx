@@ -23,7 +23,9 @@ const ChatMessage = (props: Props) => {
 
   return (
     <div
-      className={`message-box ${isUserContent ? 'message-box-user' : 'message-box-assistant'}`}
+      className={`message-box ${
+        isUserContent ? 'message-box-user' : 'message-box-assistant'
+      }`}
       style={{
         alignItems: isUserContent ? 'end' : 'start',
       }}

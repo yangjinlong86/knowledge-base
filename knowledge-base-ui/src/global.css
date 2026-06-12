@@ -16,9 +16,8 @@ body,
 }
 
 body {
-  font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
-    Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
 }
 
 /* Sider 顶部 Logo 区：深蓝渐变 + 白字（截图风格的"轻量点缀"） */

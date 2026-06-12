@@ -63,7 +63,7 @@ export const layout: RunTimeLayoutConfig = ({ initialState }) => {
     menu: {
       locale: false,
     },
-    layout: 'sider',
+    layout: 'side',
     actionsRender: () => [],
     avatarProps: {
       render: () => {
