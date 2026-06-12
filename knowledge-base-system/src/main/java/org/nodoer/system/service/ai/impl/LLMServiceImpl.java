@@ -89,7 +89,7 @@ public class LLMServiceImpl implements LLMService {
 	// }
 	//
 	// @Override
-	// public ChatModel getMultimodalModel() {
+	// public ChatModel getMultimodalChatModel() {
 	// OpenAiApi openAiApi =
 	// OpenAiApi.builder().baseUrl(multimodalBaseUrl).apiKey(multimodalApiKey).build();
 	// return OpenAiChatModel.builder()

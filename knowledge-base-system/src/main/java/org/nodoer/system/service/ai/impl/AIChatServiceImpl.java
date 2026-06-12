@@ -73,7 +73,7 @@ public class AIChatServiceImpl implements AIChatService {
 
 	@Override
 	public Flux<ChatResponse> multimodalChat(ChatMessageVO chatMessageVO) {
-		ChatModel chatModel = null;// llmService.getMultimodalModel();
+		ChatModel chatModel = null;// llmService.getMultimodalChatModel();
 		List<String> resourceIds = chatMessageVO.getResourceIds();
 		ChatClient chatClient = ChatClient.builder(chatModel).build();
 		HashMap<String, Object> params = new HashMap<>();
