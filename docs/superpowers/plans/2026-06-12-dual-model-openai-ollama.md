@@ -64,11 +64,13 @@ Read `knowledge-base-system/pom.xml` 第 45-53 行，确认当前 OpenAI starter
 
 - [ ] **Step 3: 验证依赖能解析**
 
+> **注意**：根 pom 用 `${revision}` 机制管理版本号，但仓库目前未配置 `flatten-maven-plugin`（项目既有缺陷，与本计划无关），因此任何 `mvn -pl knowledge-base-system <goal>` 形式命令都会因无法解析父 pom 而失败。所有针对 `knowledge-base-system` 模块的命令必须加 `-am`（also-make）让 Maven 先构建上游模块。
+
 运行：
 ```bash
-mvn -pl knowledge-base-system dependency:resolve -q
+mvn -pl knowledge-base-system -am dependency:resolve -q
 ```
-期望：命令成功退出，无错误。
+期望：命令成功退出，无错误；日志中能看到 `spring-ai-starter-model-openai` 与 `spring-ai-starter-model-ollama` 两个 artifact 同时被解析。
 
 - [ ] **Step 4: 提交**
 
