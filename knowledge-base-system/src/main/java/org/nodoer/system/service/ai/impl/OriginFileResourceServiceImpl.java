@@ -41,9 +41,21 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
+ * 原始文件资源 Service 实现：负责文件落 MinIO + 入库 origin_file_source 表，
+ * 并支撑两条业务路径——多模态对话附件、知识库文档（含向量化入库）。
+ *
+ * <p>
+ * 关键设计点：
+ * <ul>
+ * <li>所有上传路径必须先在入口 {@link MultipartFile#getBytes()} 把字节缓存到 {@code byte[]}， 因为 Spring 的
+ * {@code StandardMultipartFile.transferTo} 是 move 语义，原始 temp 文件被搬走后 就没法再读
+ * {@code getInputStream()}。{@link #upload(String, byte[], String)} 助手就是为此而抽出的。</li>
+ * <li>{@link #fromResourceId(List)} 会反向把资源 id 拉成 Media，是多模态对话恢复历史 + 当轮附件的关键转换器。</li>
+ * <li>知识库上传路径里使用 {@link MarkdownAutoSplitter} 替代通用 TokenTextSplitter，目的是保留 Markdown
+ * 标题层级与表格结构，避免一段表格被切分到不同 chunk。</li>
+ * </ul>
+ *
  * @author pgthinker
- * @description 针对表【origin_file_source(存储原始文件资源的表)】的数据库操作Service实现
- * @createDate 2025-04-08 04:47:02
  */
 @Slf4j
 @Service
@@ -51,18 +63,41 @@ import java.util.stream.Collectors;
 public class OriginFileResourceServiceImpl extends ServiceImpl<OriginFileResourceMapper, OriginFileResource>
 		implements OriginFileResourceService {
 
+	/** 多模态对话附件存放的 MinIO 桶名（图片、零碎文件等）。 */
 	public static final String CHAT_BUCKET_NAME = "origin-file";
 
+	/** 知识库文档存放的 MinIO 桶名（会被 Tika 解析后向量化）。 */
 	public static final String KNOWLEDGE_BUCKET_NAME = "knowledge-file";
 
+	/** MinIO 客户端封装（在 core 模块定义，按 ObjectStoreService 接口注入）。 */
 	private final ObjectStoreService objectStoreService;
 
+	/** document_entity 表的 mapper。知识库文档与原始文件资源是一对一关系。 */
 	private final DocumentEntityMapper documentEntityMapper;
 
+	/** Spring AI 自带的 token 切分器；本类已改用 MarkdownAutoSplitter，但保留依赖供后续切分策略对比。 */
 	private final TokenTextSplitter tokenTextSplitter;
 
+	/** LLM / 向量库门面，主要用于拿 VectorStore 做文档入库。 */
 	private final LLMService llmService;
 
+	/**
+	 * 把资源 id 列表还原为 Spring AI 的 {@link Media}：拉 MinIO 临时下载链接 → 下载到本地临时文件 → 嗅探 mime → 读为
+	 * ByteArrayResource。
+	 *
+	 * <p>
+	 * 用于两种场景：
+	 * <ul>
+	 * <li>当轮多模态消息：{@code AIChatServiceImpl#multimodalChat} 把当前用户上传的 resourceIds 转成 Media
+	 * 挂到 prompt。</li>
+	 * <li>历史多模态消息：{@code ChatMessageServiceImpl#toMessage} 把历史消息中的 resourceIds 还原回 Media，
+	 * 让 LLM 在多轮对话中仍能"看到"早前传过的图。</li>
+	 * </ul>
+	 *
+	 * <p>
+	 * 这里通过临时下载文件再读字节，而不是把 MinIO 流直接传给 Media —— 是为了让 mime 嗅探（基于文件头）在本地完成， 同时避免 Spring AI
+	 * 在序列化时反复打开远程流。
+	 */
 	@Override
 	public List<Media> fromResourceId(List<String> resourceIds) {
 		if (resourceIds == null || resourceIds.isEmpty()) {
@@ -70,14 +105,17 @@ public class OriginFileResourceServiceImpl extends ServiceImpl<OriginFileResourc
 		}
 		List<OriginFileResource> originFileResources = this.listByIds(resourceIds);
 		List<Media> medias = originFileResources.stream().map(item -> {
-			// 获取文件资源的临时访问链接
+			// 1. 取一个 MinIO 临时签名链接（带过期时间），避免裸暴露内部地址
 			String fileUrl = objectStoreService.getTmpFileUrl(item.getBucketName(), item.getObjectName());
+			// 2. 推断后缀（用于本地临时文件的扩展名，便于工具按扩展名识别）
 			String[] split = item.getFileName().split("\\.");
 			String suffix = split[split.length - 1];
 			try {
-				// 下载到本地
+				// 3. 下载到本地 temp 目录
 				File file = FileUtil.downloadToTempFile(fileUrl, "chat_", suffix);
+				// 4. 通过文件头嗅探真实 mime 类型（不要相信用户上传时声明的 contentType）
 				String mimeType = FileUtil.detectMimeType(file);
+				// 5. 全文读为 ByteArrayResource，封装成 Spring AI 的 Media
 				return Media.builder()
 					.data(new ByteArrayResource(Files.readAllBytes(Path.of(file.getPath()))))
 					.mimeType(MimeTypeUtils.parseMimeType(mimeType))
@@ -90,6 +128,13 @@ public class OriginFileResourceServiceImpl extends ServiceImpl<OriginFileResourc
 		return medias;
 	}
 
+	/**
+	 * 上传对话附件（多模态对话路径）。
+	 *
+	 * <p>
+	 * 流程：入口预读字节 → 委托给 {@link #upload(String, byte[], String)} 落 MinIO + 入库 → 根据
+	 * contentType 判定 isImage（前端区分缩略图 / 通用文件图标） → 二次保存。
+	 */
 	@Transactional(rollbackFor = Exception.class)
 	@Override
 	public String uploadFile(MultipartFile file) {
@@ -184,6 +229,17 @@ public class OriginFileResourceServiceImpl extends ServiceImpl<OriginFileResourc
 		return documentEntity.getId();
 	}
 
+	/**
+	 * 把资源 id 列表转换为前端可直接渲染的 {@link ResourceVO}（包含临时下载链接 + 文件名 + mime 类型）。
+	 *
+	 * <p>
+	 * 与 {@link #fromResourceId(List)} 的区别：
+	 * <ul>
+	 * <li>{@code fromResourceId} 面向 LLM —— 真的把字节读出来、封装成 Media；</li>
+	 * <li>{@code resourcesFromIds} 面向前端 UI —— 只暴露一个临时签名链接，让浏览器自己去 MinIO 拉。</li>
+	 * </ul>
+	 * 用于历史消息卡片中的附件预览、附件下载按钮等。
+	 */
 	@Override
 	public List<ResourceVO> resourcesFromIds(List<String> resourceIds) {
 		if (resourceIds == null || resourceIds.isEmpty()) {
@@ -195,6 +251,7 @@ public class OriginFileResourceServiceImpl extends ServiceImpl<OriginFileResourc
 			resourceVO.setResourceId(item);
 			resourceVO.setFileType(originFileResource.getContentType());
 			resourceVO.setFileName(originFileResource.getFileName());
+			// 给前端一个 MinIO 预签名 URL（带过期），不直接暴露内部 endpoint
 			resourceVO.setPath(objectStoreService.getTmpFileUrl(originFileResource.getBucketName(),
 					originFileResource.getObjectName()));
 			return resourceVO;
@@ -248,6 +305,13 @@ public class OriginFileResourceServiceImpl extends ServiceImpl<OriginFileResourc
 		return originFileResource;
 	}
 
+	/**
+	 * 拼装 MinIO 内的 objectName，前缀加上当前登录用户的 ID 做隔离。
+	 *
+	 * <p>
+	 * 形如：{@code {userId}/{uuidNoDash}-{originalFilename}}。 加 UUID 是防止同用户重名覆盖；用 userId
+	 * 做一级目录方便按用户审计 / 按用户清理。
+	 */
 	private String objectNameWithUserId(String filename) {
 		SystemUser loginUser = SecurityFrameworkUtil.getLoginUser();
 		return loginUser.getId() + "/" + UUID.randomUUID().toString().replace("-", "") + "-" + filename;
